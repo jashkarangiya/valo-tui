@@ -62,6 +62,13 @@ DataTable > .datatable--cursor {
     margin-bottom: 1;
 }
 
+.sched-section {
+    color: #e8674e;
+    text-style: bold;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
 #intl-bar {
     height: auto;
     border: round #e8674e;
@@ -99,6 +106,18 @@ RegionPanel.live {
 .veto { color: #4a708b; margin-bottom: 1; }
 .map-title { color: #e8674e; text-style: bold; margin-top: 1; }
 .momentum { margin-bottom: 1; }
+.mom-line { height: 1; }
+.intel { color: #4a708b; margin-bottom: 1; }
+.scoreboard { height: auto; margin-bottom: 1; }
+
+#match-header {
+    height: auto;
+    align-horizontal: center;
+    margin-bottom: 1;
+}
+.logo-l { width: auto; color: #e8674e; }
+.logo-r { width: auto; color: #5d9ce8; }
+.score-center { width: auto; padding: 0 4; content-align: center middle; }
 
 /* ── Brackets ────────────────────────────────────────────── */
 #bracket-events {

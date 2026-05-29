@@ -17,12 +17,13 @@ RULE = "#1c3a52"
 BRAND = "valo-tui · vct26"
 
 # Flat navigation: (key, route, label). Order = display order.
+# Brackets is intentionally NOT here — it's a contextual sub-view reached from
+# a match when its event actually has a playoff bracket.
 NAV = [
     ("g", "live", "live"),
     ("m", "matches", "matches"),
     ("t", "standings", "standings"),
     ("s", "schedule", "schedule"),
-    ("b", "brackets", "brackets"),
     ("a", "about", "about"),
 ]
 

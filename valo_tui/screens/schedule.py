@@ -1,4 +1,5 @@
-"""[s] schedule — upcoming matches as bento cards."""
+"""[s] schedule — upcoming matches as bento cards, split into international
+and regional events so the two tiers read separately."""
 
 from __future__ import annotations
 
@@ -27,8 +28,21 @@ class ScheduleView(VerticalScroll):
         if not matches:
             cards.mount(Label("nothing scheduled in the cache", classes="hint"))
             return
-        for m in matches[:24]:
-            when = m.time or m.date or "soon"
-            title = f"[bold {TEXT}]{m.team1.name}  vs  {m.team2.name}[/]   [{ACCENT}]·[/]  [{TEXT}]{when}[/]"
-            sub = f"[{MUTED}]{m.event} · {m.phase}[/]" if m.phase else f"[{MUTED}]{m.event}[/]"
-            cards.mount(Static(f"{title}\n{sub}", classes="card"))
+
+        intl = [m for m in matches if cache.is_international(m.event)]
+        regional = [m for m in matches if not cache.is_international(m.event)]
+
+        if intl:
+            cards.mount(Label("★ international", classes="sched-section"))
+            for m in intl[:8]:
+                cards.mount(self._card(m))
+        if regional:
+            cards.mount(Label("regional", classes="sched-section"))
+            for m in regional[:16]:
+                cards.mount(self._card(m))
+
+    def _card(self, m) -> Static:
+        when = m.time or m.date or "soon"
+        title = f"[bold {TEXT}]{m.team1.name}  vs  {m.team2.name}[/]   [{ACCENT}]·[/]  [{TEXT}]{when}[/]"
+        sub = f"[{MUTED}]{m.event} · {m.phase}[/]" if m.phase else f"[{MUTED}]{m.event}[/]"
+        return Static(f"{title}\n{sub}", classes="card")

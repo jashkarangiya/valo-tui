@@ -28,7 +28,10 @@ _REGION_KEYWORDS: dict[str, tuple[str, ...]] = {
     "China": ("china", "chinese", "中国", " cn "),
 }
 
-_INTERNATIONAL = ("masters", "champions", "valorant champions", "vct international")
+_INTERNATIONAL = (
+    "masters", "champions", "valorant champions", "vct international",
+    "esports world cup", "ewc",
+)
 
 
 def classify_region(*parts: str | None) -> str | None:

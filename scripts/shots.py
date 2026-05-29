@@ -113,6 +113,8 @@ def seed_lists():
         match(202, "Fnatic", 0, "Team Liquid", 1, "VCT 2026: EMEA Stage 1", "Playoffs", "live"),
     ]
     upcoming = [
+        match(208, "Paper Rex", None, "EDG", None, "VCT Masters 2026", "Playoffs", "upcoming", "in 1h"),
+        match(209, "Sentinels", None, "FNATIC", None, "Esports World Cup 2026", "Group A", "upcoming", "in 3h"),
         match(203, "DRX", None, "Gen.G", None, "VCT 2026: Pacific Stage 1", "Week 3", "upcoming", "in 2h"),
         match(204, "EDG", None, "Bilibili", None, "VCT 2026: China Stage 1", "Week 3", "upcoming", "in 5h"),
         match(205, "100T", None, "LOUD", None, "VCT 2026: Americas Stage 1", "Week 3", "upcoming", "in 1d"),

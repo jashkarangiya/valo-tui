@@ -31,7 +31,6 @@ class ValoTUI(App):
         Binding("m", "show('matches')", "matches"),
         Binding("t", "show('standings')", "standings"),
         Binding("s", "show('schedule')", "schedule"),
-        Binding("b", "show('brackets')", "brackets"),
         Binding("a", "show('about')", "about"),
         Binding("escape", "focus_nav", "nav"),
         Binding("r", "refresh", "refresh"),

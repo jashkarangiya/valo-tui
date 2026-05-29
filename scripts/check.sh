@@ -98,12 +98,12 @@ async def main():
         app.push_screen(MatchDetailScreen(done[0].match_id))
         for _ in range(30):
             await pilot.pause(0.3)
-            if app.screen.query(DataTable):
+            if app.screen.query(".scoreboard"):
                 break
-        tables = len(app.screen.query(DataTable))
+        boards = len(app.screen.query(".scoreboard"))
         moms = len(app.screen.query(".momentum"))
-        assert tables > 0, "detail rendered no scoreboards"
-        print(f"      matches={rows} scoreboards={tables} momentum={moms}")
+        assert boards > 0, "detail rendered no scoreboards"
+        print(f"      matches={rows} scoreboards={boards} momentum={moms}")
         print("      ok")
 
 asyncio.run(main())
