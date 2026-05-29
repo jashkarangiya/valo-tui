@@ -50,7 +50,6 @@ class MatchesView(Vertical):
 
         if matches:
             table.move_cursor(row=min(prev, len(matches) - 1))
-        table.focus()
 
     def _row(self, m: MatchCard) -> tuple[Text, ...]:
         if m.is_live:

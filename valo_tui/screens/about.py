@@ -11,6 +11,8 @@ from .widgets import ACCENT, MUTED, TEXT
 
 
 class AboutView(VerticalScroll):
+    can_focus = True
+
     def compose(self) -> ComposeResult:
         yield Label("about", classes="page-title")
         body = (

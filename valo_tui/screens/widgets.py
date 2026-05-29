@@ -28,33 +28,78 @@ NAV = [
 
 
 class Sidebar(Static):
-    """Flat nav rail with brand, active-route highlight, and a help block."""
+    """Focusable flat nav rail. Up/Down move the highlight (and switch the
+    page live); Enter/Right enters the content; brackets opens as a screen."""
+
+    can_focus = True
+
+    BINDINGS = [
+        Binding("up,k", "nav(-1)", "Up", show=False),
+        Binding("down,j", "nav(1)", "Down", show=False),
+        Binding("enter,right,l", "enter", "Open", show=False),
+    ]
 
     def __init__(self, active: str = "live", **kwargs) -> None:
-        self._active = active
+        self._cursor = self._index_of(active)
+        self._focused = False
         super().__init__(self._markup(), **kwargs)
 
+    @staticmethod
+    def _index_of(route: str) -> int:
+        for i, (_, r, _) in enumerate(NAV):
+            if r == route:
+                return i
+        return 0
+
+    @property
+    def _route(self) -> str:
+        return NAV[self._cursor][1]
+
     def set_active(self, route: str) -> None:
-        self._active = route
+        self._cursor = self._index_of(route)
         self.update(self._markup())
+
+    def action_nav(self, delta: int) -> None:
+        self._cursor = (self._cursor + delta) % len(NAV)
+        self.update(self._markup())
+        # Switch content pages live as you move; brackets opens only on enter.
+        if self._route != "brackets":
+            self.app.switch_content(self._route)
+
+    def action_enter(self) -> None:
+        if self._route == "brackets":
+            self.app.action_show("brackets")
+        else:
+            self.app.switch_content(self._route)
+            self.app.focus_content()
 
     def _markup(self) -> str:
         lines = [f"[bold {TEXT}]{BRAND}[/]", f"[{RULE}]{'─' * 20}[/]", ""]
-        for key, route, label in NAV:
-            if route == self._active:
-                lines.append(f"[{MUTED}][{key}][/] [bold {ACCENT}]{label}[/]")
+        focused = self._focused
+        for i, (key, route, label) in enumerate(NAV):
+            if i == self._cursor:
+                marker = f"[{ACCENT}]›[/]" if focused else " "
+                lines.append(f"{marker}[{MUTED}][{key}][/] [bold {ACCENT}]{label}[/]")
             else:
-                lines.append(f"[{MUTED}][{key}][/] [{TEXT}]{label}[/]")
+                lines.append(f" [{MUTED}][{key}][/] [{TEXT}]{label}[/]")
         lines += [
             "",
             f"[{RULE}]{'─' * 20}[/]",
             "",
-            f"[{MUTED}]g–a   switch page[/]",
-            f"[{MUTED}]j k   move[/]",
+            f"[{MUTED}]↑↓    navigate[/]",
             f"[{MUTED}]enter open[/]",
+            f"[{MUTED}]esc   back here[/]",
             f"[{MUTED}]q     quit[/]",
         ]
         return "\n".join(lines)
+
+    def on_focus(self) -> None:
+        self._focused = True
+        self.update(self._markup())
+
+    def on_blur(self) -> None:
+        self._focused = False
+        self.update(self._markup())
 
 
 class VimDataTable(DataTable):

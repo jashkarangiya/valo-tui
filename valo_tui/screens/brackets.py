@@ -280,10 +280,10 @@ class BracketsScreen(Screen):
         self._events: list[EventCard] = events
         for e in events:
             lv.append(ListItem(Label(e.name[:30]), id=f"ev-{e.id}"))
+        # Only fetch when the user explicitly picks an event (or one was passed
+        # in). We never auto-ping the API just because the screen opened.
         if self._event_id is not None:
             self._load(self._event_id)
-        elif events:
-            self._load(events[0].id)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.item.id and event.item.id.startswith("ev-"):

@@ -33,6 +33,7 @@ class ValoTUI(App):
         Binding("s", "show('schedule')", "schedule"),
         Binding("b", "show('brackets')", "brackets"),
         Binding("a", "show('about')", "about"),
+        Binding("escape", "focus_nav", "nav"),
         Binding("r", "refresh", "refresh"),
         Binding("q", "quit", "quit"),
     ]
@@ -48,18 +49,41 @@ class ValoTUI(App):
                 yield AboutView(id="about")
 
     def on_mount(self) -> None:
-        self.push_screen(SplashScreen())
+        # After the landing page is dismissed, focus the nav so arrow keys work.
+        self.push_screen(SplashScreen(), callback=lambda _: self.action_focus_nav())
 
     # ── routing ──────────────────────────────────────────────
     def action_show(self, route: str) -> None:
+        """Jump straight to a page (letter keys), then focus its content."""
         if route == "brackets":
             self.push_screen(BracketsScreen())
             return
         if route not in ROUTES:
             return
-        self.query_one("#content", ContentSwitcher).current = route
+        self.switch_content(route)
         self.query_one(Sidebar).set_active(route)
+        self.focus_content()
+
+    def switch_content(self, route: str) -> None:
+        """Switch the visible page without moving focus (used by nav arrows)."""
+        if route not in ROUTES:
+            return
+        self.query_one("#content", ContentSwitcher).current = route
         self._reload(route)
+
+    def focus_content(self) -> None:
+        cs = self.query_one("#content", ContentSwitcher)
+        if not cs.current:
+            return
+        view = cs.get_child_by_id(cs.current)
+        try:
+            view.query_one(VimDataTable).focus()
+        except Exception:
+            if getattr(view, "can_focus", False):
+                view.focus()
+
+    def action_focus_nav(self) -> None:
+        self.query_one(Sidebar).focus()
 
     def action_refresh(self) -> None:
         self._reload(self.query_one("#content", ContentSwitcher).current)

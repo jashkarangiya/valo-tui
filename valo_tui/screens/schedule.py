@@ -11,6 +11,8 @@ from .widgets import ACCENT, MUTED, TEXT
 
 
 class ScheduleView(VerticalScroll):
+    can_focus = True
+
     def compose(self) -> ComposeResult:
         yield Label("upcoming matches", classes="page-title")
         yield VerticalScroll(id="schedule-cards")
