@@ -1,4 +1,4 @@
-"""Main ValTUI app shell: sidebar + content switcher, single-key routing."""
+"""Main ValoTUI app shell: sidebar + content switcher, single-key routing."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from .screens.matches import MatchesView
 from .screens.widgets import Sidebar, VimDataTable
 
 
-class ValTUI(App):
-    TITLE = "valtui"
+class ValoTUI(App):
+    TITLE = "valo-tui"
     SUB_TITLE = "Valorant esports in your terminal"
     CSS_PATH = "styles.tcss"
 

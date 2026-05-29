@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dependencies first for layer caching.
 COPY pyproject.toml README.md ./
-COPY valtui ./valtui
+COPY valo_tui ./valo_tui
 RUN pip install --no-cache-dir ".[serve]"
 
 # Copy the worker and serve entrypoints.
@@ -12,6 +12,6 @@ COPY worker ./worker
 COPY serve ./serve
 
 # Shared cache volume populated by the worker, read by the TUI.
-ENV VALTUI_DB=/var/lib/valtui/cache.db
+ENV VALO_TUI_DB=/var/lib/valo-tui/cache.db
 
-CMD ["python", "-m", "valtui"]
+CMD ["python", "-m", "valo_tui"]

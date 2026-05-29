@@ -37,7 +37,7 @@ class Sidebar(Static):
     """Static nav rail listing the spec's screen map; live screens highlighted."""
 
     def compose(self) -> ComposeResult:
-        yield Label("◢ valtui", classes="brand")
+        yield Label("◢ valo-tui", classes="brand")
         for group, items in NAV:
             yield Label(f"— {group} —", classes="group")
             for key, label, available in items:

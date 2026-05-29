@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 
 import vlrdevapi as vlr
 
-from valtui import config
-from valtui.data.serialize import dumps
+from valo_tui import config
+from valo_tui.data.serialize import dumps
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (

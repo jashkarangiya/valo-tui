@@ -3,17 +3,17 @@ services:
     build: .
     command: python worker/fetcher.py
     environment:
-      VALTUI_DB: /var/lib/valtui/cache.db
-    volumes: ["valtui-data:/var/lib/valtui"]
+      VALO_TUI_DB: /var/lib/valo-tui/cache.db
+    volumes: ["valo-tui-data:/var/lib/valo-tui"]
     restart: unless-stopped
 
   web:
     build: .
     command: python serve/web.py
     environment:
-      VALTUI_DB: /var/lib/valtui/cache.db
+      VALO_TUI_DB: /var/lib/valo-tui/cache.db
     expose: ["8000"]
-    volumes: ["valtui-data:/var/lib/valtui"]
+    volumes: ["valo-tui-data:/var/lib/valo-tui"]
     depends_on: [worker]
     restart: unless-stopped
 
@@ -21,11 +21,11 @@ services:
     build: .
     command: python serve/ssh.py
     environment:
-      VALTUI_DB: /var/lib/valtui/cache.db
+      VALO_TUI_DB: /var/lib/valo-tui/cache.db
     ports: ["2222:2222"]
     volumes:
-      - "valtui-data:/var/lib/valtui"
-      - "valtui-ssh:/etc/valtui"
+      - "valo-tui-data:/var/lib/valo-tui"
+      - "valo-tui-ssh:/etc/valo-tui"
     depends_on: [worker]
     restart: unless-stopped
 
@@ -39,6 +39,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  valtui-data:
-  valtui-ssh:
+  valo-tui-data:
+  valo-tui-ssh:
   caddy-data:

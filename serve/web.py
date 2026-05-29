@@ -3,10 +3,10 @@
 from textual_serve.server import Server
 
 server = Server(
-    command="python -m valtui",
+    command="python -m valo_tui",
     host="0.0.0.0",
     port=8000,
-    title="valtui · Valorant esports in your terminal",
+    title="valo-tui · Valorant esports in your terminal",
 )
 
 if __name__ == "__main__":

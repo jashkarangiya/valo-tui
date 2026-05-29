@@ -1,7 +1,7 @@
 """Runtime configuration shared by the worker, cache, and TUI.
 
 The single source of truth here is the SQLite cache location. In Docker the
-``valtui-data`` volume is mounted at ``/var/lib/valtui`` and ``VALTUI_DB``
+``valo-tui-data`` volume is mounted at ``/var/lib/valo-tui`` and ``VALO_TUI_DB``
 points there; locally we fall back to the user cache directory so nothing
 needs root.
 """
@@ -26,7 +26,7 @@ REGIONS = ("Americas", "EMEA", "Pacific", "China")
 
 def db_path() -> Path:
     """Resolve the cache database path, creating parent dirs as needed."""
-    raw = os.environ.get("VALTUI_DB")
-    path = Path(raw) if raw else Path.home() / ".cache" / "valtui" / "cache.db"
+    raw = os.environ.get("VALO_TUI_DB")
+    path = Path(raw) if raw else Path.home() / ".cache" / "valo-tui" / "cache.db"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path

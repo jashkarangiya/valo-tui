@@ -1,4 +1,4 @@
-/* valtui — monochrome / Bento-lite.
+/* valo-tui — monochrome / Bento-lite.
    base bg #0a1822 · text #c8d8e8 · live accent #e87a5d · muted #4a708b */
 
 Screen {

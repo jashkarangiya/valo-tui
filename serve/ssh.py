@@ -10,7 +10,7 @@ from pathlib import Path
 
 import asyncssh
 
-HOST_KEY = Path("/etc/valtui/ssh_host_key")
+HOST_KEY = Path("/etc/valo-tui/ssh_host_key")
 PORT = 2222
 
 
@@ -24,7 +24,7 @@ def ensure_host_key() -> str:
     return str(HOST_KEY)
 
 
-class ValtuiSSHServer(asyncssh.SSHServer):
+class ValoTuiSSHServer(asyncssh.SSHServer):
     def begin_auth(self, username: str) -> bool:
         return False  # no auth — public read-only TUI
 
@@ -35,7 +35,7 @@ class ValtuiSSHServer(asyncssh.SSHServer):
 async def handle_client(process: asyncssh.SSHServerProcess) -> None:
     width, height = process.get_terminal_size()[:2]
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-m", "valtui",
+        sys.executable, "-m", "valo_tui",
         stdin=process.stdin,
         stdout=process.stdout,
         stderr=process.stderr,
@@ -52,14 +52,14 @@ async def handle_client(process: asyncssh.SSHServerProcess) -> None:
 async def main() -> None:
     host_key = ensure_host_key()
     await asyncssh.create_server(
-        ValtuiSSHServer,
+        ValoTuiSSHServer,
         host="0.0.0.0",
         port=PORT,
         server_host_keys=[host_key],
         process_factory=handle_client,
         allow_pty=True,
     )
-    print(f"valtui ssh server listening on :{PORT}", flush=True)
+    print(f"valo-tui ssh server listening on :{PORT}", flush=True)
     await asyncio.Future()
 
 

@@ -1,8 +1,8 @@
-# valtui
+# valo-tui
 
 > Valorant esports in your terminal.
 
-`valtui` is a read-only terminal UI for tracking live and historical Valorant
+`valo-tui` is a read-only terminal UI for tracking live and historical Valorant
 esports. It tracks the four Tier-1 regional leagues (Americas, EMEA, Pacific,
 China), international events (Masters / Champions / Game Changers), and full
 per-map scoreboards — all from a cached backend so the UI is fast and never
@@ -28,11 +28,11 @@ pip install -e .
 python worker/fetcher.py --once
 
 # 2. Launch the TUI:
-python -m valtui
+python -m valo_tui
 ```
 
-The cache lives at `~/.cache/valtui/cache.db` by default; override with the
-`VALTUI_DB` environment variable.
+The cache lives at `~/.cache/valo-tui/cache.db` by default; override with the
+`VALO_TUI_DB` environment variable.
 
 ## Navigation
 
@@ -61,7 +61,7 @@ reverse proxy for HTTPS. Point the domain in `Caddyfile` at your host.
 ## Layout
 
 ```
-valtui/   TUI package (app, screens, styles, data layer)
+valo_tui/ TUI package (app, screens, styles, data layer)
 worker/   fetcher.py — polls vlr.gg → SQLite
 serve/    web.py (textual-serve) and ssh.py (asyncssh)
 ```
