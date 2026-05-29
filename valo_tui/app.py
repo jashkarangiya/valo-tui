@@ -11,6 +11,7 @@ from .data import cache
 from .screens.global_live import GlobalLiveView
 from .screens.match_detail import MatchDetailScreen
 from .screens.matches import MatchesView
+from .screens.splash import SplashScreen
 from .screens.widgets import Sidebar, VimDataTable
 
 
@@ -37,6 +38,7 @@ class ValoTUI(App):
 
     def on_mount(self) -> None:
         self._sync_subtitle()
+        self.push_screen(SplashScreen())
 
     # ── routing ──────────────────────────────────────────────
     def action_show(self, view: str) -> None:

@@ -1,8 +1,9 @@
-"""Match detail — series header, map vetoes, and per-map scoreboards.
+"""Match detail v2 — series header, map vetoes, and per-map sections with
+win-bars, round-momentum sparklines, agent-role icons, and skeleton rows for
+maps that haven't started.
 
-Pushed on top of the dashboard when the user presses Enter on a match. The
-series fetch can hit the network (read-through cache), so it runs in a worker
-thread to keep the UI responsive."""
+The series fetch can hit the network (read-through cache), so it runs in a
+worker thread to keep the UI responsive."""
 
 from __future__ import annotations
 
@@ -11,17 +12,19 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Label
 
 from ..data import cache
 from ..data.models import MapScore, SeriesDetail
-from .widgets import LIVE, MUTED, TEXT, VimDataTable
+from ..style import bars
+from ..style.icons import agent_glyph, map_icon
+from .widgets import LIVE, MUTED, TEXT, LiveDot, SkeletonRow, VimDataTable
 
 _COLS = [
     ("player", 16),
-    ("agent", 10),
+    ("agent", 13),
     ("acs", 5),
     ("k", 4),
     ("d", 4),
@@ -46,7 +49,8 @@ class MatchDetailScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="detail-scroll"):
-            yield Label(f"[{MUTED}]loading match {self.match_id}…[/]", id="detail-status")
+            yield SkeletonRow(cells=6)
+            yield Label(f"[{MUTED}]loading match {self.match_id}…[/]")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -64,45 +68,79 @@ class MatchDetailScreen(Screen):
             body.mount(Label(f"[{MUTED}]no detail available for this match[/]"))
             return
 
-        body.mount(Label(self._header(detail), classes="series-header"))
+        self._mount_header(body, detail)
         if detail.vetoes:
             body.mount(Label(self._vetoes(detail), classes="veto"))
 
-        if not detail.maps:
+        maps = [m for m in detail.maps if not m.is_aggregate]
+        if not maps:
             body.mount(Label(f"[{MUTED}]no map data yet[/]"))
             return
 
-        for m in detail.maps:
-            title = self._map_title(m)
-            body.mount(Label(title, classes="map-title"))
-            body.mount(self._map_table(m))
+        for m in maps:
+            self._mount_map(body, detail, m)
 
-    # ── rendering helpers ────────────────────────────────────
-    def _header(self, d: SeriesDetail) -> str:
+    # ── header ───────────────────────────────────────────────
+    def _mount_header(self, body: VerticalScroll, d: SeriesDetail) -> None:
         s1 = d.team1.score if d.team1.score is not None else "–"
         s2 = d.team2.score if d.team2.score is not None else "–"
-        bo = f"  [{MUTED}]{d.best_of}[/]" if d.best_of else ""
-        note = f"  [{LIVE}]{d.status_note}[/]" if d.status_note else ""
-        line1 = f"[bold {TEXT}]{d.team1.name}[/]  [{LIVE}]{s1} – {s2}[/]  [bold {TEXT}]{d.team2.name}[/]{bo}{note}"
-        line2 = f"[{MUTED}]{d.event} · {d.phase}[/]"
-        return f"{line1}\n{line2}"
+        title = (
+            f"[bold {TEXT}]{d.team1.name}[/]  [{LIVE}]{s1} – {s2}[/]  "
+            f"[bold {TEXT}]{d.team2.name}[/]"
+        )
+        bo = f"  ·  [{MUTED}]{d.best_of}[/]" if d.best_of else ""
+        if d.is_live:
+            status_widget = LiveDot("LIVE")
+        elif d.is_completed:
+            status_widget = Label(f"[{MUTED}]✓ final[/]")
+        else:
+            status = d.remaining or d.status_note or "upcoming"
+            status_widget = Label(f"[{LIVE}]○ {status}[/]")
+        body.mount(
+            Horizontal(
+                status_widget,
+                Label(f"  {title}{bo}"),
+                classes="series-header",
+            )
+        )
+        body.mount(Label(f"[{MUTED}]{d.event} · {d.phase}[/]", classes="detail-sub"))
 
     def _vetoes(self, d: SeriesDetail) -> str:
         parts = []
         for v in d.vetoes:
             verb = v.action.lower()
+            icon = map_icon(v.map)
             if verb == "ban":
-                parts.append(f"[{MUTED}]{v.team} ban {v.map}[/]")
+                parts.append(f"[{MUTED}]✖ {v.team} ban {icon} {v.map}[/]")
             elif verb == "pick":
-                parts.append(f"[{TEXT}]{v.team} pick {v.map}[/]")
+                parts.append(f"[{TEXT}]➤ {v.team} pick {icon} {v.map}[/]")
             else:
-                parts.append(f"[{MUTED}]{v.map} ({verb})[/]")
-        return "veto: " + "  ·  ".join(parts)
+                parts.append(f"[{MUTED}]➤ {icon} {v.map} (decider)[/]")
+        return "veto:  " + "   ".join(parts)
 
-    def _map_title(self, m: MapScore) -> str:
-        if m.team1_score is not None and m.team2_score is not None:
-            return f"{m.name}  [{LIVE}]{m.team1_score}–{m.team2_score}[/]"
-        return f"{m.name}  [{MUTED}](all maps)[/]"
+    # ── per-map section ──────────────────────────────────────
+    def _mount_map(self, body: VerticalScroll, d: SeriesDetail, m: MapScore) -> None:
+        body.mount(Label(self._map_header(d, m), classes="map-title"))
+        if m.state == "pending":
+            for _ in range(3):
+                body.mount(SkeletonRow(cells=5))
+            return
+        if m.rounds:
+            body.mount(
+                Label(f"  {bars.momentum(m.rounds, m.team1_short)}", classes="momentum")
+            )
+        body.mount(self._map_table(m))
+
+    def _map_header(self, d: SeriesDetail, m: MapScore) -> str:
+        icon = map_icon(m.name)
+        bar = bars.winbar(m.team1_score, m.team2_score)
+        if m.has_score:
+            score = f"[{TEXT}]{m.team1_score}–{m.team2_score}[/]"
+        else:
+            score = f"[{MUTED}]TBD[/]"
+        pick = d.pick_label(m.name)
+        pick_txt = f"   [{MUTED}]{pick}[/]" if pick else ""
+        return f"{icon} [{TEXT}]{m.name:<9}[/] {bar}  {score}{pick_txt}"
 
     def _map_table(self, m: MapScore) -> VimDataTable:
         table = VimDataTable(cursor_type="row", zebra_stripes=False)
@@ -111,7 +149,7 @@ class MatchDetailScreen(Screen):
         for p in sorted(m.players, key=lambda p: (p.acs or 0), reverse=True):
             table.add_row(
                 Text(p.name, style=TEXT),
-                Text(", ".join(p.agents) or "—", style=MUTED),
+                self._agent_cell(p.agents),
                 _num(p.acs),
                 _num(p.k),
                 _num(p.d),
@@ -121,9 +159,17 @@ class MatchDetailScreen(Screen):
                 _num(p.fk),
                 _num(p.fd),
             )
-        # Size the table to its contents so multiple maps stack in the scroll.
         table.styles.height = len(m.players) + 1
         return table
+
+    def _agent_cell(self, agents: list[str]) -> Text:
+        if not agents:
+            return Text("—", style=MUTED)
+        glyph, colour = agent_glyph(agents[0])
+        cell = Text()
+        cell.append(f"{glyph} ", style=colour)
+        cell.append(", ".join(agents), style=MUTED)
+        return cell
 
 
 def _num(v) -> Text:

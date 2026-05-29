@@ -100,8 +100,14 @@ DataTable > .datatable--cursor {
 }
 
 .series-header {
+    height: auto;
     border: round #e87a5d;
     padding: 0 1;
+    align-vertical: middle;
+}
+
+.detail-sub {
+    color: #4a708b;
     margin-bottom: 1;
 }
 
@@ -114,6 +120,10 @@ DataTable > .datatable--cursor {
     color: #e87a5d;
     text-style: bold;
     margin-top: 1;
+}
+
+.momentum {
+    margin-bottom: 1;
 }
 
 Footer {

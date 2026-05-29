@@ -122,6 +122,25 @@ class PlayerLine:
 
 
 @dataclass
+class RoundLine:
+    number: int
+    side: str | None = None  # "Attacker" | "Defender"
+    winner_short: str | None = None
+
+    @property
+    def is_attack(self) -> bool:
+        return (self.side or "").lower().startswith("attack")
+
+    @classmethod
+    def from_raw(cls, d: dict) -> "RoundLine":
+        return cls(
+            number=_i(d.get("number")) or 0,
+            side=d.get("winner_side"),
+            winner_short=d.get("winner_team_short"),
+        )
+
+
+@dataclass
 class MapScore:
     name: str
     players: list[PlayerLine] = field(default_factory=list)
@@ -129,6 +148,26 @@ class MapScore:
     team1_score: int | None = None
     team2_short: str | None = None
     team2_score: int | None = None
+    rounds: list[RoundLine] = field(default_factory=list)
+
+    @property
+    def is_aggregate(self) -> bool:
+        return self.name.lower() == "all"
+
+    @property
+    def has_score(self) -> bool:
+        # Upcoming maps come back as 0–0 with placeholder rosters; treat only a
+        # non-zero score as "real".
+        return (self.team1_score or 0) + (self.team2_score or 0) > 0
+
+    @property
+    def state(self) -> str:
+        """One of 'completed' | 'live' | 'pending' for rendering decisions."""
+        if self.rounds:
+            return "completed"
+        if self.has_score:
+            return "live"
+        return "pending"
 
     @classmethod
     def from_raw(cls, d: dict) -> "MapScore":
@@ -142,6 +181,7 @@ class MapScore:
             team1_score=_i(t1.get("score")),
             team2_short=t2.get("short") or t2.get("name"),
             team2_score=_i(t2.get("score")),
+            rounds=[RoundLine.from_raw(r) for r in (d.get("rounds") or [])],
         )
 
 
@@ -161,9 +201,31 @@ class SeriesDetail:
     phase: str
     best_of: str | None = None
     status_note: str | None = None
+    remaining: str | None = None
     patch: str | None = None
     vetoes: list[Veto] = field(default_factory=list)
     maps: list[MapScore] = field(default_factory=list)
+
+    @property
+    def is_live(self) -> bool:
+        return "live" in (self.status_note or "").lower()
+
+    @property
+    def is_completed(self) -> bool:
+        if self.is_live:
+            return False
+        return (self.team1.score or 0) > 0 or (self.team2.score or 0) > 0
+
+    def pick_label(self, map_name: str) -> str | None:
+        """Which team picked a given map (or 'decider'), from the veto data."""
+        for v in self.vetoes:
+            if v.map.lower() != map_name.lower():
+                continue
+            if v.action.lower() == "pick":
+                return f"{v.team} pick"
+            if v.action.lower() in ("remaining", "decider"):
+                return "decider"
+        return None
 
     @classmethod
     def from_raw(cls, info: dict, maps: list[dict] | None) -> "SeriesDetail":
@@ -186,6 +248,7 @@ class SeriesDetail:
             phase=info.get("event_phase") or "",
             best_of=info.get("best_of"),
             status_note=info.get("status_note"),
+            remaining=info.get("remaining"),
             patch=info.get("patch"),
             vetoes=vetoes,
             maps=[MapScore.from_raw(m) for m in (maps or [])],

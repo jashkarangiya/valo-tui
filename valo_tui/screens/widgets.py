@@ -54,6 +54,50 @@ class VimDataTable(DataTable):
     ]
 
 
+class LiveDot(Static):
+    """A live indicator that pulses ● ↔ ○ on a slow interval."""
+
+    DEFAULT_CSS = "LiveDot { width: auto; color: #e87a5d; }"
+
+    def __init__(self, label: str = "LIVE", **kwargs) -> None:
+        self._label = label
+        self._on = True
+        super().__init__(self._markup(), **kwargs)
+
+    def _markup(self) -> str:
+        dot = "●" if self._on else "○"
+        return f"[{LIVE}]{dot} {self._label}[/]" if self._label else f"[{LIVE}]{dot}[/]"
+
+    def on_mount(self) -> None:
+        self.set_interval(0.7, self._tick)
+
+    def _tick(self) -> None:
+        self._on = not self._on
+        self.update(self._markup())
+
+
+class SkeletonRow(Static):
+    """A shimmering placeholder row shown while real data is unavailable."""
+
+    DEFAULT_CSS = "SkeletonRow { width: 1fr; height: 1; color: #22384a; }"
+    _FRAMES = ["░░░░", "▒▒▒▒", "▓▓▓▓", "▒▒▒▒"]
+
+    def __init__(self, cells: int = 8, **kwargs) -> None:
+        self._cells = cells
+        self._i = 0
+        super().__init__(self._frame(), **kwargs)
+
+    def _frame(self) -> str:
+        return "   ".join([self._FRAMES[self._i]] * self._cells)
+
+    def on_mount(self) -> None:
+        self.set_interval(0.18, self._tick)
+
+    def _tick(self) -> None:
+        self._i = (self._i + 1) % len(self._FRAMES)
+        self.update(self._frame())
+
+
 def match_line(m: MatchCard) -> str:
     """One-line Rich-markup summary of a match for the dashboard panels."""
     if m.is_live:
