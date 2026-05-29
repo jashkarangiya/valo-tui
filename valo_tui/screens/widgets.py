@@ -8,41 +8,53 @@ from textual.widgets import DataTable, Label, Static
 
 from ..data.models import MatchCard
 
-LIVE = "#e87a5d"
+LIVE = "#e8674e"
+ACCENT = "#e8674e"
 MUTED = "#4a708b"
 TEXT = "#c8d8e8"
+RULE = "#1c3a52"
 
-# Navigation map: (key, label, available?)
+BRAND = "valo-tui · vct26"
+
+# Flat navigation: (key, route, label). Order = display order.
 NAV = [
-    ("Circuit", [
-        ("g", "global live", True),
-        ("r", "regions", False),
-        ("i", "international", False),
-    ]),
-    ("Competition", [
-        ("m", "matches", True),
-        ("s", "schedule", False),
-        ("b", "brackets", True),
-        ("t", "standings", False),
-    ]),
-    ("Deep Dives", [
-        ("R", "records", False),
-        ("w", "watchlist", False),
-        ("x", "compare", False),
-    ]),
+    ("g", "live", "live"),
+    ("m", "matches", "matches"),
+    ("t", "standings", "standings"),
+    ("s", "schedule", "schedule"),
+    ("b", "brackets", "brackets"),
+    ("a", "about", "about"),
 ]
 
 
 class Sidebar(Static):
-    """Static nav rail listing the spec's screen map; live screens highlighted."""
+    """Flat nav rail with brand, active-route highlight, and a help block."""
 
-    def compose(self) -> ComposeResult:
-        yield Label("◢ valo-tui", classes="brand")
-        for group, items in NAV:
-            yield Label(f"— {group} —", classes="group")
-            for key, label, available in items:
-                cls = "nav" if available else "nav-dim"
-                yield Label(f"  [{key}] {label}", classes=cls)
+    def __init__(self, active: str = "live", **kwargs) -> None:
+        self._active = active
+        super().__init__(self._markup(), **kwargs)
+
+    def set_active(self, route: str) -> None:
+        self._active = route
+        self.update(self._markup())
+
+    def _markup(self) -> str:
+        lines = [f"[bold {TEXT}]{BRAND}[/]", f"[{RULE}]{'─' * 20}[/]", ""]
+        for key, route, label in NAV:
+            if route == self._active:
+                lines.append(f"[{MUTED}][{key}][/] [bold {ACCENT}]{label}[/]")
+            else:
+                lines.append(f"[{MUTED}][{key}][/] [{TEXT}]{label}[/]")
+        lines += [
+            "",
+            f"[{RULE}]{'─' * 20}[/]",
+            "",
+            f"[{MUTED}]g–a   switch page[/]",
+            f"[{MUTED}]j k   move[/]",
+            f"[{MUTED}]enter open[/]",
+            f"[{MUTED}]q     quit[/]",
+        ]
+        return "\n".join(lines)
 
 
 class VimDataTable(DataTable):

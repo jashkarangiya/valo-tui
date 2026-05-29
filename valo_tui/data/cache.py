@@ -217,6 +217,12 @@ def _store_series(key: str, payload: dict) -> None:
 def _store_kv(key: str, payload: object) -> None:
     try:
         con = _connect()
+        # Self-initialise: the read-through cache may run before the worker
+        # has ever created the schema.
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS kv "
+            "(key TEXT PRIMARY KEY, value JSON NOT NULL, updated_at TEXT NOT NULL)"
+        )
         con.execute(
             "INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?, json(?), ?)",
             (key, json.dumps(payload), datetime.now(timezone.utc).isoformat()),
@@ -273,5 +279,9 @@ def _fetch_event_matches(event_id: int) -> list[dict] | None:
     try:
         matches = vlr.events.matches(event_id) or []
     except Exception:
+        return None
+    # An empty result is almost always a transient/rate-limit error; signal
+    # failure so the caller keeps any previously cached (good) copy.
+    if not matches:
         return None
     return [to_jsonable(m) for m in matches]

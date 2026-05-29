@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Grid, Vertical
-from textual.widgets import Static
+from textual.widgets import Label, Static
 
 from .. import config
 from ..data import cache
@@ -44,6 +44,7 @@ class GlobalLiveView(Vertical):
     """The [g] global live screen."""
 
     def compose(self) -> ComposeResult:
+        yield Label("global live", classes="page-title")
         yield Static(id="intl-bar")
         with Grid(id="regions-grid"):
             for region in config.REGIONS:

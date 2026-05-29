@@ -22,14 +22,14 @@ class MatchesView(Vertical):
     """The [m] matches screen, backed by a DataTable keyed on match_id."""
 
     def compose(self) -> ComposeResult:
-        yield Label("matches", classes="view-title")
+        yield Label("all matches", classes="page-title")
         yield Label("j/k move · enter → scoreboards · r refresh", classes="hint")
         table = VimDataTable(id="matches-table", cursor_type="row", zebra_stripes=False)
         yield table
 
     def on_mount(self) -> None:
         table = self.query_one(VimDataTable)
-        table.add_column("", width=4, key="status")
+        table.add_column("status", width=7, key="status")
         table.add_column("match", width=34, key="match")
         table.add_column("score", width=7, key="score")
         table.add_column("event", key="event")
@@ -54,13 +54,13 @@ class MatchesView(Vertical):
 
     def _row(self, m: MatchCard) -> tuple[Text, ...]:
         if m.is_live:
-            status = Text("● LIVE", style=LIVE)
+            status = Text("● live", style=LIVE)
             color = TEXT
         elif m.status == "completed":
-            status = Text("done", style=MUTED)
+            status = Text("✓ done", style=MUTED)
             color = MUTED
         else:
-            status = Text("soon", style=MUTED)
+            status = Text("○ soon", style=MUTED)
             color = TEXT
 
         match = Text(f"{m.team1.name}  vs  {m.team2.name}", style=color)

@@ -268,7 +268,7 @@ class BracketsScreen(Screen):
     def compose(self) -> ComposeResult:
         with Horizontal():
             with VerticalScroll(id="bracket-events"):
-                yield Label("events", classes="view-title")
+                yield Label("events", classes="page-title")
                 yield ListView(id="event-list")
             with VerticalScroll(id="bracket-body"):
                 yield Label("select an event  ·  enter", id="bracket-hint", classes="hint")

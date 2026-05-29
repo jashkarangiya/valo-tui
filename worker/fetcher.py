@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -49,6 +50,26 @@ def write(con: sqlite3.Connection, key: str, value: object) -> None:
     con.commit()
 
 
+def _has_cached(con: sqlite3.Connection, key: str) -> bool:
+    row = con.execute("SELECT value FROM kv WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return False
+    try:
+        return bool(json.loads(row[0]))
+    except (json.JSONDecodeError, TypeError):
+        return False
+
+
+def write_unless_empty(con: sqlite3.Connection, key: str, value: list) -> bool:
+    """Write a list feed, but never clobber good cached data with an empty
+    result (an empty fetch almost always means a transient API/rate-limit
+    error for these feeds). Returns True if written."""
+    if not value and _has_cached(con, key):
+        return False
+    write(con, key, value)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Individual fetch steps. Each is defensive: a single failure is logged and
 # the previous cached value is left untouched.
@@ -63,21 +84,21 @@ def fetch_live(con: sqlite3.Connection) -> None:
 
 def fetch_upcoming(con: sqlite3.Connection) -> None:
     matches = vlr.matches.upcoming(limit=80)
-    write(con, "matches:upcoming", matches)
-    _log(f"upcoming: {len(matches)} match(es)")
+    kept = not write_unless_empty(con, "matches:upcoming", matches)
+    _log(f"upcoming: {len(matches)} match(es)" + (" (empty — kept cached)" if kept else ""))
 
 
 def fetch_completed(con: sqlite3.Connection) -> None:
     matches = vlr.matches.completed(limit=60)
-    write(con, "matches:completed", matches)
-    _log(f"completed: {len(matches)} match(es)")
+    kept = not write_unless_empty(con, "matches:completed", matches)
+    _log(f"completed: {len(matches)} match(es)" + (" (empty — kept cached)" if kept else ""))
 
 
 def fetch_events(con: sqlite3.Connection) -> None:
     events = vlr.events.list_events(status=vlr.EventStatus.ONGOING, limit=40)
     events += vlr.events.list_events(status=vlr.EventStatus.UPCOMING, limit=40)
-    write(con, "events:active", events)
-    _log(f"events: {len(events)} active")
+    kept = not write_unless_empty(con, "events:active", events)
+    _log(f"events: {len(events)} active" + (" (empty — kept cached)" if kept else ""))
 
 
 def _log(msg: str) -> None:
