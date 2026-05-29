@@ -14,6 +14,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from .. import config
+from .bracket import Bracket, build_bracket
 from .models import EventCard, MatchCard, SeriesDetail
 
 # ---------------------------------------------------------------------------
@@ -210,6 +211,10 @@ def _fetch_series(match_id: int) -> dict | None:
 
 
 def _store_series(key: str, payload: dict) -> None:
+    _store_kv(key, payload)
+
+
+def _store_kv(key: str, payload: object) -> None:
     try:
         con = _connect()
         con.execute(
@@ -220,3 +225,53 @@ def _store_series(key: str, payload: dict) -> None:
         con.close()
     except sqlite3.Error:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Event matches + bracket (read-through, like series detail)
+# ---------------------------------------------------------------------------
+
+
+def event_matches(event_id: int) -> list[dict]:
+    """All matches for an event as raw dicts, read-through cached."""
+    key = f"event:matches:{event_id}"
+    value, updated_at = get_raw(key)
+    fresh = updated_at and _detail_fresh_ttl(updated_at, config.BRACKET_TTL)
+    if isinstance(value, list) and fresh:
+        return value
+
+    fetched = _fetch_event_matches(event_id)
+    if fetched is None:
+        return value if isinstance(value, list) else []
+    _store_kv(key, fetched)
+    return fetched
+
+
+def bracket(event_id: int) -> Bracket:
+    return build_bracket(event_matches(event_id))
+
+
+def _detail_fresh_ttl(updated_at: str | None, ttl: int) -> bool:
+    if not updated_at:
+        return False
+    try:
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(updated_at).replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        return False
+    return age.total_seconds() < ttl
+
+
+def _fetch_event_matches(event_id: int) -> list[dict] | None:
+    try:
+        import vlrdevapi as vlr
+
+        from .serialize import to_jsonable
+    except ImportError:
+        return None
+    try:
+        matches = vlr.events.matches(event_id) or []
+    except Exception:
+        return None
+    return [to_jsonable(m) for m in matches]

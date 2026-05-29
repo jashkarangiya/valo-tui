@@ -8,6 +8,7 @@ from textual.containers import Horizontal
 from textual.widgets import ContentSwitcher, Footer, Header
 
 from .data import cache
+from .screens.brackets import BracketsScreen
 from .screens.global_live import GlobalLiveView
 from .screens.match_detail import MatchDetailScreen
 from .screens.matches import MatchesView
@@ -23,6 +24,7 @@ class ValoTUI(App):
     BINDINGS = [
         Binding("g", "show('global')", "Global"),
         Binding("m", "show('matches')", "Matches"),
+        Binding("b", "brackets", "Brackets"),
         Binding("r", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
@@ -45,6 +47,9 @@ class ValoTUI(App):
         switcher = self.query_one("#content", ContentSwitcher)
         switcher.current = view
         self._reload(view)
+
+    def action_brackets(self) -> None:
+        self.push_screen(BracketsScreen())
 
     def action_refresh(self) -> None:
         switcher = self.query_one("#content", ContentSwitcher)

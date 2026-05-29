@@ -20,6 +20,9 @@ EVENTS_INTERVAL = 15 * 60
 # How long an on-demand series detail stays fresh before a read-through refetch.
 DETAIL_TTL = 60
 
+# Brackets / event matches change slowly; cache them longer.
+BRACKET_TTL = 300
+
 # The four Tier-1 regional leagues, used to bucket the global-live dashboard.
 REGIONS = ("Americas", "EMEA", "Pacific", "China")
 

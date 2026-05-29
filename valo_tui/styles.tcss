@@ -126,6 +126,37 @@ DataTable > .datatable--cursor {
     margin-bottom: 1;
 }
 
+/* ── Brackets ────────────────────────────────────────────── */
+#bracket-events {
+    width: 28;
+    border-right: solid #163047;
+    padding: 1 1;
+}
+
+#bracket-body {
+    width: 1fr;
+    padding: 1 2;
+    overflow-x: auto;
+}
+
+BracketWidget {
+    width: auto;
+    height: auto;
+}
+
+#event-list {
+    background: #0a1822;
+}
+
+#event-list > ListItem {
+    background: #0a1822;
+    color: #c8d8e8;
+}
+
+#event-list > ListItem.--highlight {
+    background: #163047;
+}
+
 Footer {
     background: #0a1822;
 }

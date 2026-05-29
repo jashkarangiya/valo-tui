@@ -22,7 +22,7 @@ NAV = [
     ("Competition", [
         ("m", "matches", True),
         ("s", "schedule", False),
-        ("b", "brackets", False),
+        ("b", "brackets", True),
         ("t", "standings", False),
     ]),
     ("Deep Dives", [
