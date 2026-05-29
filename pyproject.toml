@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "valtui"
+version = "0.1.0"
+description = "valtui · Valorant esports in your terminal"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "textual>=8.0",
+    "vlrdevapi>=1.6",
+]
+
+[project.optional-dependencies]
+serve = [
+    "textual-serve>=1.1",
+    "asyncssh>=2.14",
+]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+valtui = "valtui.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["valtui"]

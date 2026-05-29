@@ -1,0 +1,126 @@
+/* valtui — monochrome / Bento-lite.
+   base bg #0a1822 · text #c8d8e8 · live accent #e87a5d · muted #4a708b */
+
+Screen {
+    background: #0a1822;
+    color: #c8d8e8;
+}
+
+#body {
+    height: 1fr;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+Sidebar {
+    width: 24;
+    background: #0a1822;
+    border-right: solid #163047;
+    padding: 1 2;
+}
+
+Sidebar .brand {
+    color: #e87a5d;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+Sidebar .group {
+    color: #4a708b;
+    text-style: bold;
+    margin-top: 1;
+}
+
+Sidebar .nav {
+    color: #c8d8e8;
+}
+
+Sidebar .nav-dim {
+    color: #4a708b;
+}
+
+/* ── Content area ────────────────────────────────────────── */
+ContentSwitcher {
+    width: 1fr;
+    padding: 1 2;
+}
+
+#intl-bar {
+    height: auto;
+    border: round #e87a5d;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+#regions-grid {
+    grid-size: 2 2;
+    grid-gutter: 1;
+    height: 1fr;
+}
+
+RegionPanel {
+    border: round #163047;
+    padding: 0 1;
+    height: 1fr;
+}
+
+RegionPanel.live {
+    border: round #e87a5d;
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+DataTable {
+    height: 1fr;
+    background: #0a1822;
+}
+
+DataTable > .datatable--header {
+    background: #0a1822;
+    color: #4a708b;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #163047;
+    color: #c8d8e8;
+}
+
+.view-title {
+    color: #c8d8e8;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.hint {
+    color: #4a708b;
+}
+
+/* ── Match detail ────────────────────────────────────────── */
+#detail-scroll {
+    padding: 1 2;
+}
+
+.series-header {
+    border: round #e87a5d;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+.veto {
+    color: #4a708b;
+    margin-bottom: 1;
+}
+
+.map-title {
+    color: #e87a5d;
+    text-style: bold;
+    margin-top: 1;
+}
+
+Footer {
+    background: #0a1822;
+}
+
+Header {
+    background: #163047;
+    color: #c8d8e8;
+}
