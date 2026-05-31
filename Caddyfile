@@ -1,3 +1,0 @@
-valo-tui.yourdomain.dev {
-    reverse_proxy web:8000
-}

@@ -8,3 +8,8 @@ dist/
 .cache/
 .DS_Store
 screenshots/
+
+# Go
+/bin/
+.ssh/
+*.test
