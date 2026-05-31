@@ -1,12 +1,10 @@
-"""[t] standings — a points table.
+"""[t] standings — the focused event's stage table.
 
-Standings aren't fetched yet, so for now we derive a simple win/loss table
-from the completed matches already in the cache (UI-first; real per-event
-standings via vlr.events.standings can replace this later)."""
+Event-scoped: a W-L / map-record / differential matrix derived from the
+event's completed matches (real per-event standings via vlr.events.standings
+can replace this later)."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
 
 from rich.text import Text
 
@@ -15,67 +13,43 @@ from textual.containers import Vertical
 from textual.widgets import Label
 
 from ..data import cache
+from ..data.standings import team_records
 from .widgets import ACCENT, MUTED, TEXT, VimDataTable
-
-
-@dataclass
-class _Row:
-    team: str
-    played: int = 0
-    wins: int = 0
-    losses: int = 0
-
-    @property
-    def pct(self) -> float:
-        return (self.wins / self.played * 100) if self.played else 0.0
 
 
 class StandingsView(Vertical):
     def compose(self) -> ComposeResult:
         yield Label("standings", classes="page-title")
-        yield Label("derived from completed matches in cache", classes="hint")
+        yield Label("derived from this event's completed matches", classes="hint")
         yield VimDataTable(id="standings-table", cursor_type="row", zebra_stripes=False)
 
     def on_mount(self) -> None:
         t = self.query_one(VimDataTable)
         t.add_column("#", width=4)
-        t.add_column("team", width=20)
-        t.add_column("P", width=4)
-        t.add_column("W", width=4)
-        t.add_column("L", width=4)
-        t.add_column("win%", width=6)
+        t.add_column("team", width=22)
+        t.add_column("W-L", width=7)
+        t.add_column("maps", width=8)
+        t.add_column("diff", width=6)
         self.load_data()
 
     def load_data(self) -> None:
         t = self.query_one(VimDataTable)
         t.clear()
-        table: dict[str, _Row] = {}
-        for m in cache.completed_matches():
-            s1 = m.team1.score if m.team1.score is not None else -1
-            s2 = m.team2.score if m.team2.score is not None else -1
-            if s1 == s2:
-                continue
-            t1 = table.setdefault(m.team1.name, _Row(m.team1.name))
-            t2 = table.setdefault(m.team2.name, _Row(m.team2.name))
-            t1.played += 1
-            t2.played += 1
-            if s1 > s2:
-                t1.wins += 1
-                t2.losses += 1
-            else:
-                t2.wins += 1
-                t1.losses += 1
+        eid = getattr(self.app, "current_event_id", None)
+        if eid is None:
+            t.add_row(Text(""), Text("select an event first", style=MUTED),
+                      Text(""), Text(""), Text(""))
+            return
 
-        rows = sorted(table.values(), key=lambda r: (r.wins, r.pct), reverse=True)
-        for i, r in enumerate(rows[:16], start=1):
+        rows = team_records(cache.event_match_cards(eid, self.app.event_name))
+        for i, r in enumerate(rows[:24], start=1):
             t.add_row(
                 Text(str(i), style=MUTED),
                 Text(r.team, style=TEXT),
-                Text(str(r.played), style=MUTED),
-                Text(str(r.wins), style=TEXT),
-                Text(str(r.losses), style=MUTED),
-                Text(f"{r.pct:.0f}%", style=ACCENT),
+                Text(f"{r.wins}-{r.losses}", style=TEXT),
+                Text(f"{r.maps_won}-{r.maps_lost}", style=MUTED),
+                Text(f"{r.map_diff:+d}", style=ACCENT if r.map_diff > 0 else MUTED),
             )
         if not rows:
-            t.add_row(Text(""), Text("no completed matches in cache", style=MUTED),
-                      Text(""), Text(""), Text(""), Text(""))
+            t.add_row(Text(""), Text("no completed matches for this event yet", style=MUTED),
+                      Text(""), Text(""), Text(""))

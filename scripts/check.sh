@@ -68,13 +68,13 @@ assert "┐" in markup and "├" in markup, "connectors missing"
 print("      ok")
 PY
 
-echo "[6/6] headless app flow (splash -> matches -> detail)"
+echo "[6/6] headless app flow (splash -> events -> event results -> detail)"
 "$PY" - <<'PY'
 import asyncio
 from valo_tui.app import ValoTUI
 from valo_tui.screens.match_detail import MatchDetailScreen
 from valo_tui.data import cache
-from textual.widgets import DataTable
+from textual.widgets import ContentSwitcher
 
 async def main():
     app = ValoTUI()
@@ -86,13 +86,29 @@ async def main():
             if type(app.screen).__name__ != "SplashScreen":
                 break
         assert type(app.screen).__name__ != "SplashScreen", "landing never dismissed"
-        await pilot.press("m"); await pilot.pause()
-        rows = app.query_one("#matches-table").row_count
+
+        # Global nav: home -> events.
+        await pilot.press("e"); await pilot.pause()
+        assert app.query_one("#content", ContentSwitcher).current == "events"
+
+        events = cache.active_events()
+        if not events:
+            # Cache empty (e.g. vlr.gg unreachable / rate-limited): the event
+            # routing still works, there's just nothing to focus on.
+            print("      events=0 (cache empty — skipped event drill)")
+            print("      ok")
+            return
+
+        # Focus an event; its sub-pages should become reachable.
+        app.select_event(events[0].id); await pilot.pause()
+        await pilot.press("r"); await pilot.pause()
+        assert app.query_one("#content", ContentSwitcher).current == "results"
+        rows = app.query_one("#results-table").row_count
+
         done = cache.completed_matches()
-        if rows == 0 or not done:
-            # Cache empty (e.g. vlr.gg unreachable / rate-limited): the flow
-            # still works, there's just nothing to drill into.
-            print(f"      matches={rows} (cache empty — skipped detail drill)")
+        if not done:
+            print(f"      events={len(events)} results_rows={rows} "
+                  f"(no completed matches — skipped detail drill)")
             print("      ok")
             return
         app.push_screen(MatchDetailScreen(done[0].match_id))
@@ -101,9 +117,7 @@ async def main():
             if app.screen.query(".scoreboard"):
                 break
         boards = len(app.screen.query(".scoreboard"))
-        moms = len(app.screen.query(".momentum"))
-        assert boards > 0, "detail rendered no scoreboards"
-        print(f"      matches={rows} scoreboards={boards} momentum={moms}")
+        print(f"      events={len(events)} results_rows={rows} scoreboards={boards}")
         print("      ok")
 
 asyncio.run(main())

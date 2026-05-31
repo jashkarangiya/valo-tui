@@ -16,21 +16,33 @@ RULE = "#1c3a52"
 
 BRAND = "valo-tui · vct26"
 
-# Flat navigation: (key, route, label). Order = display order.
-# Brackets is intentionally NOT here — it's a contextual sub-view reached from
-# a match when its event actually has a playoff bracket.
-NAV = [
-    ("g", "live", "live"),
-    ("m", "matches", "matches"),
-    ("t", "standings", "standings"),
-    ("s", "schedule", "schedule"),
+# Global nav: (key, route, label). Always visible.
+GLOBAL_NAV = [
+    ("h", "home", "home"),
+    ("e", "events", "events"),
+    ("l", "live", "live"),
     ("a", "about", "about"),
+]
+
+# Event-context nav: revealed only while an event is in focus. These are the
+# children of an event, never global pages.
+EVENT_NAV = [
+    ("o", "overview", "overview"),
+    ("r", "results", "results"),
+    ("f", "fixtures", "fixtures"),
+    ("t", "standings", "standings"),
+    ("b", "bracket", "bracket"),
+    ("m", "teams", "teams"),
 ]
 
 
 class Sidebar(Static):
-    """Focusable flat nav rail. Up/Down move the highlight (and switch the
-    page live); Enter/Right enters the content; brackets opens as a screen."""
+    """Focusable, context-aware nav rail.
+
+    Shows the global section always; once an event is selected the app reveals
+    that event's sub-pages beneath it. Up/Down move the highlight (switching the
+    page live); Enter/Right enters the content.
+    """
 
     can_focus = True
 
@@ -40,49 +52,72 @@ class Sidebar(Static):
         Binding("enter,right,l", "enter", "Open", show=False),
     ]
 
-    def __init__(self, active: str = "live", **kwargs) -> None:
-        self._cursor = self._index_of(active)
+    def __init__(self, active: str = "home", **kwargs) -> None:
+        self._active = active
         self._focused = False
-        super().__init__(self._markup(), **kwargs)
+        super().__init__("", **kwargs)
 
-    @staticmethod
-    def _index_of(route: str) -> int:
-        for i, (_, r, _) in enumerate(NAV):
-            if r == route:
+    def on_mount(self) -> None:
+        self.update(self._markup())
+
+    def _nav(self) -> list[tuple[str, str, str]]:
+        """The currently selectable items (global, plus event items if any)."""
+        items = list(GLOBAL_NAV)
+        if getattr(self.app, "current_event_id", None) is not None:
+            items += EVENT_NAV
+        return items
+
+    def _index(self) -> int:
+        for i, (_, route, _) in enumerate(self._nav()):
+            if route == self._active:
                 return i
         return 0
 
     @property
     def _route(self) -> str:
-        return NAV[self._cursor][1]
+        return self._nav()[self._index()][1]
 
     def set_active(self, route: str) -> None:
-        self._cursor = self._index_of(route)
+        self._active = route
+        self.update(self._markup())
+
+    def rebuild(self) -> None:
+        """Re-render after the event context changed."""
         self.update(self._markup())
 
     def action_nav(self, delta: int) -> None:
-        self._cursor = (self._cursor + delta) % len(NAV)
+        nav = self._nav()
+        self._active = nav[(self._index() + delta) % len(nav)][1]
         self.update(self._markup())
-        # Switch content pages live as you move; brackets opens only on enter.
-        if self._route != "brackets":
-            self.app.switch_content(self._route)
+        self.app.switch_content(self._active)
 
     def action_enter(self) -> None:
-        if self._route == "brackets":
-            self.app.action_show("brackets")
-        else:
-            self.app.switch_content(self._route)
-            self.app.focus_content()
+        self.app.switch_content(self._route)
+        self.app.focus_content()
 
     def _markup(self) -> str:
-        lines = [f"[bold {TEXT}]{BRAND}[/]", f"[{RULE}]{'─' * 20}[/]", ""]
+        active = self._active
         focused = self._focused
-        for i, (key, route, label) in enumerate(NAV):
-            if i == self._cursor:
+
+        def row(key: str, route: str, label: str) -> str:
+            if route == active:
                 marker = f"[{ACCENT}]›[/]" if focused else " "
-                lines.append(f"{marker}[{MUTED}][{key}][/] [bold {ACCENT}]{label}[/]")
-            else:
-                lines.append(f" [{MUTED}][{key}][/] [{TEXT}]{label}[/]")
+                return f"{marker}[{MUTED}][{key}][/] [bold {ACCENT}]{label}[/]"
+            return f" [{MUTED}][{key}][/] [{TEXT}]{label}[/]"
+
+        lines = [f"[bold {TEXT}]{BRAND}[/]", f"[{RULE}]{'─' * 20}[/]", ""]
+        lines += [row(k, r, lbl) for k, r, lbl in GLOBAL_NAV]
+
+        if getattr(self.app, "current_event_id", None) is not None:
+            name = _clip(getattr(self.app, "event_name", "") or "event", 18)
+            lines += [
+                "",
+                f"[{MUTED}]── event ──[/]",
+                f"[bold {ACCENT}]{name}[/]",
+                "",
+            ]
+            lines += [row(k, r, lbl) for k, r, lbl in EVENT_NAV]
+
         lines += [
             "",
             f"[{RULE}]{'─' * 20}[/]",

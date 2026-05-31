@@ -109,6 +109,13 @@ def active_events() -> list[EventCard]:
     return [EventCard.from_raw(d) for d in _get_list("events:active")]
 
 
+def event_by_id(event_id: int) -> EventCard | None:
+    for e in active_events():
+        if e.id == event_id:
+            return e
+    return None
+
+
 def last_updated() -> str | None:
     """Most recent write across the polling keys, as a short HH:MM:SS UTC."""
     stamps = []
@@ -254,6 +261,13 @@ def event_matches(event_id: int) -> list[dict]:
         return value if isinstance(value, list) else []
     _store_kv(key, fetched)
     return fetched
+
+
+def event_match_cards(event_id: int, event_name: str = "") -> list[MatchCard]:
+    """Event-scoped matches as typed cards for the results/fixtures sub-pages."""
+    return [
+        MatchCard.from_event_raw(d, event_name) for d in event_matches(event_id)
+    ]
 
 
 def bracket(event_id: int) -> Bracket:

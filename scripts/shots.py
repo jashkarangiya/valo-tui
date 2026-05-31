@@ -84,6 +84,11 @@ def seed_bracket(event_id: int):
         return {"match_id": mid, "phase": ph, "status": "completed",
                 "teams": [{"name": a, "score": sa, "is_winner": sa > sb},
                           {"name": b, "score": sb, "is_winner": sb > sa}]}
+
+    def up(mid, ph, a, b, time):
+        return {"match_id": mid, "phase": ph, "status": "upcoming", "time": time,
+                "teams": [{"name": a}, {"name": b}]}
+
     raw = [
         m(101, "Upper Quarterfinals", "NRG", 2, "KRÜ", 0),
         m(102, "Upper Quarterfinals", "LOUD", 1, "MIBR", 2),
@@ -99,6 +104,8 @@ def seed_bracket(event_id: int):
         m(112, "Lower Round 3", "MIBR", 1, "Sentinels", 2),
         m(113, "Lower Final", "G2", 2, "Sentinels", 1),
         m(114, "Grand Final", "NRG", 3, "G2", 2),
+        up(120, "Showmatch", "NRG", "Sentinels", "in 2h"),
+        up(121, "Showmatch", "G2", "MIBR", "tomorrow"),
     ]
     cache._store_kv(f"event:matches:{event_id}", raw)
 
@@ -138,10 +145,12 @@ async def main():
     out.mkdir(exist_ok=True)
     seed_lists()
     seed_series(5000)
-    seed_bracket(7000)
+    # The bracket / results / standings / fixtures / teams sub-pages all read
+    # the event's own match list, so seed it under a real event id (301).
+    seed_bracket(301)
 
     from valo_tui.app import ValoTUI
-    from valo_tui.screens.brackets import BracketsScreen, BracketWidget
+    from valo_tui.screens.brackets import BracketWidget
     from valo_tui.screens.match_detail import MatchDetailScreen
     from textual.widgets import DataTable
 
@@ -156,19 +165,33 @@ async def main():
             await pilot.pause(0.2)
             if type(app.screen).__name__ != "SplashScreen":
                 break
-        # content pages
-        await pilot.press("g"); await pilot.pause()
+
+        # ── global pages ──────────────────────────────────────
+        await pilot.press("l"); await pilot.pause()
         app.save_screenshot("02_live.svg", path=str(out))
-        await pilot.press("m"); await pilot.pause()
-        app.save_screenshot("03_matches.svg", path=str(out))
-        await pilot.press("t"); await pilot.pause()
-        app.save_screenshot("04_standings.svg", path=str(out))
-        await pilot.press("s"); await pilot.pause()
-        app.save_screenshot("05_schedule.svg", path=str(out))
+        await pilot.press("e"); await pilot.pause()
+        app.save_screenshot("09_events.svg", path=str(out))
         await pilot.press("a"); await pilot.pause()
         app.save_screenshot("06_about.svg", path=str(out))
-        # match detail v2
-        await pilot.press("m"); await pilot.pause()
+
+        # ── focus an event, then its sub-pages ────────────────
+        app.select_event(301); await pilot.pause()
+        app.save_screenshot("10_overview.svg", path=str(out))
+        await pilot.press("r"); await pilot.pause()
+        app.save_screenshot("03_matches.svg", path=str(out))   # results
+        await pilot.press("t"); await pilot.pause()
+        app.save_screenshot("04_standings.svg", path=str(out))
+        await pilot.press("f"); await pilot.pause()
+        app.save_screenshot("05_schedule.svg", path=str(out))  # fixtures
+        await pilot.press("b"); await pilot.pause()
+        for _ in range(20):
+            await asyncio.sleep(0.3)
+            if app.screen.query(BracketWidget):
+                break
+        await asyncio.sleep(0.3)
+        app.save_screenshot("08_brackets.svg", path=str(out))
+
+        # ── match detail ──────────────────────────────────────
         app.push_screen(MatchDetailScreen(5000))
         for _ in range(20):
             await pilot.pause(0.3)
@@ -176,14 +199,6 @@ async def main():
                 break
         app.save_screenshot("07_match_detail.svg", path=str(out))
         await pilot.press("escape"); await pilot.pause()
-        # brackets — plain sleeps so we don't block on screen idle
-        app.push_screen(BracketsScreen(7000))
-        for _ in range(20):
-            await asyncio.sleep(0.3)
-            if app.screen.query(BracketWidget):
-                break
-        await asyncio.sleep(0.3)
-        app.save_screenshot("08_brackets.svg", path=str(out))
 
     print("saved screenshots:")
     for f in sorted(out.glob("*.svg")):

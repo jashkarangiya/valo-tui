@@ -7,3 +7,4 @@ dist/
 *.db
 .cache/
 .DS_Store
+screenshots/

@@ -66,6 +66,41 @@ class MatchCard:
             date=d.get("date"),
         )
 
+    @classmethod
+    def from_event_raw(cls, d: dict, event_name: str = "") -> "MatchCard":
+        """Map a ``vlr.events.matches`` row (``teams`` list, not team1/team2)
+        into the shared card shape so event sub-pages reuse the same widgets."""
+        teams = d.get("teams") or []
+        t1 = teams[0] if len(teams) > 0 and teams[0] else {}
+        t2 = teams[1] if len(teams) > 1 and teams[1] else {}
+        return cls(
+            match_id=_i(d.get("match_id")) or 0,
+            team1=TeamSide.from_raw(t1),
+            team2=TeamSide.from_raw(t2),
+            event=event_name or d.get("event") or "",
+            phase=d.get("phase") or d.get("event_phase") or "",
+            status=_norm_status(d),
+            time=d.get("time"),
+            date=d.get("date"),
+        )
+
+
+def _norm_status(d: dict) -> str:
+    """Normalise an event-match status into upcoming | live | completed."""
+    raw = (d.get("status") or "").lower()
+    if "live" in raw:
+        return "live"
+    if "complet" in raw or "final" in raw:
+        return "completed"
+    if "upcom" in raw or "tbd" in raw or "soon" in raw or "sched" in raw:
+        return "upcoming"
+    # No usable status string: infer from the data. A decided winner means the
+    # series is over; otherwise assume it hasn't been played yet.
+    teams = d.get("teams") or []
+    if any((t or {}).get("is_winner") for t in teams):
+        return "completed"
+    return "upcoming"
+
 
 @dataclass
 class EventCard:

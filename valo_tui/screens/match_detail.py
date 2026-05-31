@@ -33,11 +33,12 @@ _BRACKET_PHASES = (
 _ROLE_ORDER = ("duelist", "initiator", "controller", "sentinel", "flex")
 
 
-def _logo(tag: str) -> str:
+def _big(text: str) -> str:
+    """Big figlet rendering used for the score hero."""
     try:
-        return pyfiglet.figlet_format(tag[:4], font="ansi_shadow").rstrip("\n")
+        return pyfiglet.figlet_format(text, font="ansi_shadow").rstrip("\n")
     except Exception:
-        return tag
+        return text
 
 
 class MatchDetailScreen(Screen):
@@ -91,9 +92,9 @@ class MatchDetailScreen(Screen):
         if eid is None:
             self.app.notify("bracket unavailable (event not in cache)", timeout=2)
             return
-        from .brackets import BracketsScreen
-
-        self.app.push_screen(BracketsScreen(eid))
+        # Drop the detail overlay, focus the app on this event, open its bracket.
+        self.app.pop_screen()
+        self.app.select_event(eid, tab="bracket")
 
     # ── render ───────────────────────────────────────────────
     def _render_detail(self, detail: SeriesDetail | None) -> None:
@@ -114,33 +115,39 @@ class MatchDetailScreen(Screen):
             self._mount_map(body, detail, m)
 
     def _mount_header(self, body: VerticalScroll, d: SeriesDetail) -> None:
-        t1 = (d.team1.short or d.team1.name[:4]).upper()
-        t2 = (d.team2.short or d.team2.name[:4]).upper()
-        s1 = d.team1.score if d.team1.score is not None else "–"
-        s2 = d.team2.score if d.team2.score is not None else "–"
+        s1 = d.team1.score if d.team1.score is not None else 0
+        s2 = d.team2.score if d.team2.score is not None else 0
         if d.is_live:
             status = f"[{TEAM1}]● live[/]"
         elif d.is_completed:
             status = f"[{MUTED}]✓ final[/]"
         else:
             status = f"[{MUTED}]○ {d.remaining or 'upcoming'}[/]"
-        bo = f" · {d.best_of}" if d.best_of else ""
-        center = (
-            f"\n\n[bold {TEAM1}]{s1}[/] [{MUTED}]–[/] [bold {TEAM2}]{s2}[/]\n"
-            f"[{MUTED}]{bo.strip(' ·')}[/]   {status}"
+
+        # Team identities sit above the score; the score itself is the hero.
+        names = (
+            f"[bold {TEAM1}]{d.team1.name}[/]    [{MUTED}]vs[/]    "
+            f"[bold {TEAM2}]{d.team2.name}[/]"
         )
+        body.mount(Label(names, classes="hero-names"))
         body.mount(
             Horizontal(
-                Static(_logo(t1), classes="logo-l"),
-                Static(center, classes="score-center"),
-                Static(_logo(t2), classes="logo-r"),
+                Static(_big(str(s1)), classes="hero-l"),
+                Static("\n\n[dim]—[/]", classes="hero-dash"),
+                Static(_big(str(s2)), classes="hero-r"),
                 id="match-header",
             )
         )
-        sub = f"[{MUTED}]{d.event} · {d.phase}[/]"
+
+        bo = d.best_of or ""
+        meta = f"[{MUTED}]{bo}[/]" if bo else ""
+        if d.phase:
+            meta += f"[{MUTED}] · {d.phase}[/]" if meta else f"[{MUTED}]{d.phase}[/]"
+        meta = f"{meta}   {status}" if meta else status
         if self._has_bracket():
-            sub += f"    [{TEAM1}][b][/] [{TEXT}]bracket[/]"
-        body.mount(Label(sub, classes="detail-sub"))
+            meta += f"    [{TEAM1}][b][/] [{TEXT}]bracket[/]"
+        body.mount(Label(meta, classes="detail-sub-center"))
+        body.mount(Label(f"[{MUTED}]{d.event}[/]", classes="detail-sub-center"))
         intel = self._intel(d)
         if intel:
             body.mount(Label(intel, classes="intel"))

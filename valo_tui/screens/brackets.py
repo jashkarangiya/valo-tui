@@ -10,14 +10,12 @@ from rich.markup import escape
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.reactive import reactive
-from textual.screen import Screen
-from textual.widgets import Footer, Label, ListItem, ListView, Static
+from textual.widgets import Label, Static
 
 from ..data import cache
 from ..data.bracket import Bracket, BracketMatch
-from ..data.models import EventCard
 
 # Grid geometry.
 BOX_W = 15          # team box: name (11) + score (4)
@@ -257,42 +255,25 @@ class BracketWidget(Static):
         self.update(render_bracket(self.bracket, m.match_id if m else None))
 
 
-# ── screen ───────────────────────────────────────────────────
-class BracketsScreen(Screen):
-    BINDINGS = [Binding("escape,q", "app.pop_screen", "Back")]
+# ── view ─────────────────────────────────────────────────────
+class BracketView(VerticalScroll):
+    """[b] bracket — the focused event's playoff tree. Event-scoped: the event
+    is chosen on the events list, so this view just renders the current one."""
 
-    def __init__(self, event_id: int | None = None) -> None:
-        super().__init__()
-        self._event_id = event_id
+    can_focus = True
 
     def compose(self) -> ComposeResult:
-        with Horizontal():
-            with VerticalScroll(id="bracket-events"):
-                yield Label("events", classes="page-title")
-                yield ListView(id="event-list")
-            with VerticalScroll(id="bracket-body"):
-                yield Label("select an event  ·  enter", id="bracket-hint", classes="hint")
-        yield Footer()
+        yield Label("bracket", classes="page-title")
+        yield VerticalScroll(id="bracket-body")
 
-    def on_mount(self) -> None:
-        events = cache.active_events()
-        lv = self.query_one("#event-list", ListView)
-        self._events: list[EventCard] = events
-        for e in events:
-            lv.append(ListItem(Label(e.name[:30]), id=f"ev-{e.id}"))
-        # Only fetch when the user explicitly picks an event (or one was passed
-        # in). We never auto-ping the API just because the screen opened.
-        if self._event_id is not None:
-            self._load(self._event_id)
-
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        if event.item.id and event.item.id.startswith("ev-"):
-            self._load(int(event.item.id[3:]))
-
-    def _load(self, event_id: int) -> None:
+    def load_data(self) -> None:
         body = self.query_one("#bracket-body", VerticalScroll)
         body.remove_children()
-        bracket = cache.bracket(event_id)
+        eid = getattr(self.app, "current_event_id", None)
+        if eid is None:
+            body.mount(Label("select an event first", classes="hint"))
+            return
+        bracket = cache.bracket(eid)
         if not bracket.has_data:
             body.mount(Label("no playoff bracket for this event yet", classes="hint"))
             return
