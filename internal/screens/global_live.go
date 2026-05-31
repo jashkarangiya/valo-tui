@@ -37,6 +37,12 @@ func NewGlobalLive(w, h int) GlobalLive {
 
 func (g *GlobalLive) SetSize(w, h int) { g.w, g.h = w, h }
 
+// Load synchronously refreshes the dashboard from the cache (used on entry and
+// for ctrl+r); the periodic refresh still runs via Init/Update.
+func (g *GlobalLive) Load() {
+	g.regions, g.intl = data.GlobalLive()
+}
+
 func (g GlobalLive) Init() tea.Cmd {
 	return tea.Batch(fetchGlobalLive(), tickGlobalLive())
 }
@@ -71,12 +77,17 @@ func (g GlobalLive) View() string {
 	if half < 10 {
 		half = 10
 	}
+	// Even 2×2 grid: each card the same width and height (mirrors v1's grid).
+	rowH := (g.h - 5) / 2
+	if rowH < 4 {
+		rowH = 4
+	}
 	panel := func(region string) string {
 		card := styles.Card
 		if g.regionHasLive(region) {
 			card = styles.CardLive
 		}
-		return card.Width(half).Render(g.renderRegion(region))
+		return card.Width(half).Height(rowH).Render(g.renderRegion(region))
 	}
 	top := lipgloss.JoinHorizontal(lipgloss.Top, panel("Americas"), panel("EMEA"))
 	bot := lipgloss.JoinHorizontal(lipgloss.Top, panel("Pacific"), panel("China"))

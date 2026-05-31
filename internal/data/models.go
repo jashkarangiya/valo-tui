@@ -5,6 +5,7 @@ package data
 
 import (
 	"strconv"
+	"strings"
 )
 
 // REGIONS are the four Tier-1 regional leagues used to bucket global-live.
@@ -72,6 +73,58 @@ func matchFromRaw(d map[string]any) MatchCard {
 		Time:    s(d["time"]),
 		Date:    s(d["date"]),
 	}
+}
+
+// matchFromEventRaw maps a vlr.events.matches row (a `teams` list rather than
+// team1/team2) into the shared card shape, mirroring MatchCard.from_event_raw.
+func matchFromEventRaw(d map[string]any, eventName string) MatchCard {
+	teams := asList(d["teams"])
+	var t1, t2 map[string]any
+	if len(teams) > 0 {
+		t1 = asMap(teams[0])
+	}
+	if len(teams) > 1 {
+		t2 = asMap(teams[1])
+	}
+	event := eventName
+	if event == "" {
+		event = s(d["event"])
+	}
+	phase := s(d["phase"])
+	if phase == "" {
+		phase = s(d["event_phase"])
+	}
+	return MatchCard{
+		MatchID: deref(i(d["match_id"])),
+		Team1:   teamFromRaw(t1),
+		Team2:   teamFromRaw(t2),
+		Event:   event,
+		Phase:   phase,
+		Status:  normStatus(d),
+		Time:    s(d["time"]),
+		Date:    s(d["date"]),
+	}
+}
+
+// normStatus normalises an event-match status into upcoming|live|completed,
+// inferring from a decided winner when no usable status string is present.
+func normStatus(d map[string]any) string {
+	raw := strings.ToLower(s(d["status"]))
+	switch {
+	case strings.Contains(raw, "live"):
+		return "live"
+	case strings.Contains(raw, "complet"), strings.Contains(raw, "final"):
+		return "completed"
+	case strings.Contains(raw, "upcom"), strings.Contains(raw, "tbd"),
+		strings.Contains(raw, "soon"), strings.Contains(raw, "sched"):
+		return "upcoming"
+	}
+	for _, t := range asList(d["teams"]) {
+		if b, _ := asMap(t)["is_winner"].(bool); b {
+			return "completed"
+		}
+	}
+	return "upcoming"
 }
 
 // EventCard is a tournament row for the events list.
@@ -152,4 +205,37 @@ func asMap(v any) map[string]any {
 		return m
 	}
 	return nil
+}
+
+func asList(v any) []any {
+	if l, ok := v.([]any); ok {
+		return l
+	}
+	return nil
+}
+
+// f coerces an arbitrary JSON value into *float64 (for adr, hs_pct).
+func f(v any) *float64 {
+	switch t := v.(type) {
+	case float64:
+		return &t
+	case int:
+		x := float64(t)
+		return &x
+	case string:
+		if x, err := strconv.ParseFloat(t, 64); err == nil {
+			return &x
+		}
+	}
+	return nil
+}
+
+func strList(v any) []string {
+	out := []string{}
+	for _, e := range asList(v) {
+		if str, ok := e.(string); ok {
+			out = append(out, str)
+		}
+	}
+	return out
 }

@@ -14,3 +14,10 @@ type SelectEventMsg struct {
 	ID  int
 	Tab string
 }
+
+// CloseOverlayMsg dismisses the match-detail overlay and returns to the shell.
+type CloseOverlayMsg struct{}
+
+// OpenBracketMsg asks the root to focus the named event and open its bracket
+// (emitted from the match-detail [b] binding).
+type OpenBracketMsg struct{ EventName string }

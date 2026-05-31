@@ -3,6 +3,7 @@ package data
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,6 +149,55 @@ func LastUpdated() string {
 		return ""
 	}
 	return latest.UTC().Format("15:04:05")
+}
+
+// getObject decodes a kv value known to be a JSON object.
+func getObject(key string) map[string]any {
+	raw, _ := getRaw(key)
+	if raw == nil {
+		return nil
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// EventMatches returns all cached matches for an event as raw dicts. Read-only:
+// unlike v1 there is no network read-through yet (the Go fetcher is pending),
+// so a cache miss yields an empty list.
+func EventMatches(eventID int) []map[string]any {
+	return getList(fmt.Sprintf("event:matches:%d", eventID))
+}
+
+// EventMatchCards returns an event's matches as typed cards for the
+// results/fixtures/standings sub-pages.
+func EventMatchCards(eventID int, eventName string) []MatchCard {
+	rows := EventMatches(eventID)
+	out := make([]MatchCard, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, matchFromEventRaw(r, eventName))
+	}
+	return out
+}
+
+// SeriesDetailFor returns per-map scoreboards + vetoes for a match from cache.
+func SeriesDetailFor(matchID int) (SeriesDetail, bool) {
+	obj := getObject(fmt.Sprintf("series:%d", matchID))
+	if obj == nil {
+		return SeriesDetail{}, false
+	}
+	info := asMap(obj["info"])
+	if info == nil {
+		return SeriesDetail{}, false
+	}
+	return seriesFromRaw(info, asList(obj["maps"])), true
+}
+
+// BracketFor reconstructs an event's double-elim bracket from its matches.
+func BracketFor(eventID int) Bracket {
+	return BuildBracket(EventMatches(eventID))
 }
 
 // RegionSlots holds one league's three time-buckets for the global dashboard.

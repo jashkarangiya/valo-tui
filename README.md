@@ -30,6 +30,9 @@ The cache lives at `~/.cache/valo-tui/cache.db` by default; override with the
 # Build the binaries
 go build -o bin/ ./cmd/...
 
+# Seed the cache with sample data (until the Go fetcher lands)
+go run ./cmd/valo-seed
+
 # Run the TUI locally
 go run ./cmd/valo-tui
 ```
@@ -76,15 +79,19 @@ standings / bracket / teams) become reachable.
 
 ## Status
 
-Working: the read-side data layer, theme, sidebar, the framed event-first
-shell, the splash and global-live screens, and the SSH server. The remaining
-screens render a placeholder until ported, and the vlr.gg fetcher
-(`internal/vlr` + a `cmd/valo-fetcher`) is the next milestone — until then the
-cache must be populated externally.
+Full feature parity with the original Python TUI: home, events, about,
+global-live dashboard, the match-detail broadcast view (hero score, series
+momentum, per-map scoreboards grouped by agent role, round momentum), and the
+event sub-pages — overview, results, fixtures, standings, bracket (ASCII
+double-elim tree) and teams — all reading from the SQLite cache, plus the Wish
+SSH server.
+
+The one piece still pending is the **vlr.gg fetcher** (`internal/vlr` +
+`cmd/valo-fetcher`); until it lands, populate the cache with `cmd/valo-seed`.
 
 ## Roadmap
 
 1. ~~Go scaffold · SSH server · splash + global live~~ ✅
-2. Port the flat screens (home, events, about, match detail, standings).
-3. Event sub-pages (results / fixtures / bracket / teams) + live dot + countdown.
+2. ~~Flat screens (home, events, about, match detail)~~ ✅
+3. ~~Event sub-pages (overview, results, fixtures, standings, bracket, teams)~~ ✅
 4. Build the vlr.gg fetcher in Go (`internal/vlr` + `cmd/valo-fetcher`).

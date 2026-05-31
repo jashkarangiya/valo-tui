@@ -39,48 +39,74 @@ var EventNav = []NavItem{
 var (
 	mutedS  = lipgloss.NewStyle().Foreground(styles.Muted)
 	textS   = lipgloss.NewStyle().Foreground(styles.Text)
+	accentS = lipgloss.NewStyle().Foreground(styles.Accent)
 	accentB = lipgloss.NewStyle().Foreground(styles.Accent).Bold(true)
 	textB   = lipgloss.NewStyle().Foreground(styles.Text).Bold(true)
 	ruleS   = lipgloss.NewStyle().Foreground(styles.Rule)
 	liveS   = lipgloss.NewStyle().Foreground(styles.Live)
+	rowSel  = lipgloss.NewStyle().Foreground(styles.Accent).Background(styles.SelBg).Bold(true)
 )
 
-// Sidebar renders the nav rail for the current route. eventName is "" when no
-// event is in focus; focused controls whether the active row shows the ›
-// cursor (set when the rail itself has keyboard focus).
-func Sidebar(active, eventName string, focused bool) string {
-	row := func(it NavItem) string {
-		if it.Route == active {
-			marker := " "
-			if focused {
-				marker = lipgloss.NewStyle().Foreground(styles.Accent).Render("›")
-			}
-			return marker + mutedS.Render("["+it.Key+"]") + " " + accentB.Render(it.Label)
-		}
-		return " " + mutedS.Render("["+it.Key+"]") + " " + textS.Render(it.Label)
+// navRow renders one rail entry. The active page ALWAYS shows the › cursor and
+// a highlighted [key] + label so you can see where you are; when the rail holds
+// keyboard focus the active row also gets a background highlight.
+func navRow(it NavItem, active, focused bool) string {
+	if !active {
+		return "  " + mutedS.Render("["+it.Key+"]") + " " + textS.Render(it.Label)
+	}
+	if focused {
+		return rowSel.Render("› [" + it.Key + "] " + it.Label)
+	}
+	return accentS.Render("› ["+it.Key+"]") + " " + accentB.Render(it.Label)
+}
+
+// buildSidebar is the single source of the rail layout: it returns the rendered
+// lines and a map from line index → route for click hit-testing.
+func buildSidebar(active, eventName string, focused bool) ([]string, map[int]string) {
+	var lines []string
+	routes := map[int]string{}
+	add := func(s string) { lines = append(lines, s) }
+	addNav := func(it NavItem) {
+		routes[len(lines)] = it.Route
+		add(navRow(it, it.Route == active, focused))
 	}
 
-	var b strings.Builder
-	b.WriteString(textB.Render(brand) + "\n")
-	b.WriteString(ruleS.Render(strings.Repeat("─", 20)) + "\n\n")
+	add(textB.Render(brand))
+	add(ruleS.Render(strings.Repeat("─", 20)))
+	add("")
 	for _, it := range GlobalNav {
-		b.WriteString(row(it) + "\n")
+		addNav(it)
 	}
-
 	if eventName != "" {
-		b.WriteString("\n" + mutedS.Render("── event ──") + "\n")
-		b.WriteString(accentB.Render(clip(eventName, 18)) + "\n\n")
+		add("")
+		add(mutedS.Render("── event ──"))
+		add(accentB.Render(clip(eventName, 18)))
+		add("")
 		for _, it := range EventNav {
-			b.WriteString(row(it) + "\n")
+			addNav(it)
 		}
 	}
+	add("")
+	add(ruleS.Render(strings.Repeat("─", 20)))
+	add("")
+	add(mutedS.Render("↑↓    navigate"))
+	add(mutedS.Render("enter  open"))
+	add(mutedS.Render("esc    back to rail"))
+	add(mutedS.Render("q      quit"))
+	return lines, routes
+}
 
-	b.WriteString("\n" + ruleS.Render(strings.Repeat("─", 20)) + "\n\n")
-	b.WriteString(mutedS.Render("↑↓    navigate") + "\n")
-	b.WriteString(mutedS.Render("enter open") + "\n")
-	b.WriteString(mutedS.Render("esc   back here") + "\n")
-	b.WriteString(mutedS.Render("q     quit"))
-	return b.String()
+// Sidebar renders the nav rail for the current route.
+func Sidebar(active, eventName string, focused bool) string {
+	lines, _ := buildSidebar(active, eventName, focused)
+	return strings.Join(lines, "\n")
+}
+
+// SidebarRoutes maps a sidebar text-line index to the route on that line (for
+// mouse clicks). Only depends on whether an event is in focus.
+func SidebarRoutes(eventName string) map[int]string {
+	_, routes := buildSidebar("", eventName, false)
+	return routes
 }
 
 // MatchLine is a one-line summary of a match for the dashboard panels.

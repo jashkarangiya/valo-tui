@@ -5,19 +5,33 @@ package styles
 
 import "charm.land/lipgloss/v2"
 
-// Palette — kept byte-for-byte identical to styles.tcss so the Go build is
-// visually continuous with the shipped Python TUI.
+// Palette — VALORANT brand colours. This is the single source of colour for
+// the whole app; every other file references these vars, so the theme can be
+// changed here alone.
 //
-//	bg #0a1822 · text #c8d8e8 · accent #e8674e · muted #4a708b
+//	bg #0F1923 ("Rage") · text #ECE8E1 ("Nitro") · accent #FF4655 ("Tilt") · teal #18E2C4
 var (
-	BG     = lipgloss.Color("#0a1822")
-	Text   = lipgloss.Color("#c8d8e8")
-	Accent = lipgloss.Color("#e8674e") // also "LIVE"
-	Live   = lipgloss.Color("#e8674e")
-	Muted  = lipgloss.Color("#4a708b")
-	Rule   = lipgloss.Color("#1c3a52")
-	Border = lipgloss.Color("#1c3a52")
-	Blue   = lipgloss.Color("#5d9ce8")
+	BG      = lipgloss.Color("#0F1923") // Valorant dark navy
+	Surface = lipgloss.Color("#1B2733") // elevated panels
+	Text    = lipgloss.Color("#ECE8E1") // off-white
+	Accent  = lipgloss.Color("#FF4655") // Valorant red — the signature colour
+	Live    = lipgloss.Color("#FF4655")
+	Muted   = lipgloss.Color("#7B8B97") // steel gray
+	Rule    = lipgloss.Color("#2B3A45")
+	Border  = lipgloss.Color("#2B3A45")
+	Blue    = lipgloss.Color("#18E2C4") // mint/teal secondary
+
+	// Match colours: team 1 (left) is the brand red, team 2 (right) the teal.
+	Team1    = Accent
+	Team2    = Blue
+	SelBg    = lipgloss.Color("#2A3A47") // selected-row / cursor background
+	BarTrack = lipgloss.Color("#243441") // empty bar track
+
+	// Agent-role accents, tuned to the palette.
+	RoleDuelist    = lipgloss.Color("#FF4655") // aggressive red
+	RoleController = lipgloss.Color("#8B7BE8") // smoke purple
+	RoleInitiator  = lipgloss.Color("#F0B43C") // recon amber
+	RoleSentinel   = lipgloss.Color("#18E2C4") // anchor teal
 )
 
 var (
