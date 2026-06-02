@@ -10,9 +10,9 @@ import (
 	"github.com/jashkarangiya/valo-tui/internal/styles"
 )
 
-// version is shown on the splash. Kept here until a build-time ldflags value
-// replaces it.
-const version = "0.1.0"
+// version is shown on the splash and about page. Kept here until a build-time
+// ldflags value replaces it.
+const version = "0.2.0"
 
 // "valo-tui" in figlet ansi_shadow (the same font family as the match-detail
 // score hero), so the branding is consistent across the app.
