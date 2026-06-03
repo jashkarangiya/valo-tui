@@ -62,7 +62,7 @@ func navRow(it NavItem, active, focused bool) string {
 
 // buildSidebar is the single source of the rail layout: it returns the rendered
 // lines and a map from line index → route for click hit-testing.
-func buildSidebar(active, eventName string, focused bool) ([]string, map[int]string) {
+func buildSidebar(active, eventName string, focused bool, freshness string) ([]string, map[int]string) {
 	var lines []string
 	routes := map[int]string{}
 	add := func(s string) { lines = append(lines, s) }
@@ -93,19 +93,24 @@ func buildSidebar(active, eventName string, focused bool) ([]string, map[int]str
 	add(mutedS.Render("enter  open"))
 	add(mutedS.Render("esc    back to rail"))
 	add(mutedS.Render("q      quit"))
+	if freshness != "" {
+		add("")
+		add(mutedS.Render("↻ " + freshness))
+	}
 	return lines, routes
 }
 
-// Sidebar renders the nav rail for the current route.
-func Sidebar(active, eventName string, focused bool) string {
-	lines, _ := buildSidebar(active, eventName, focused)
+// Sidebar renders the nav rail for the current route. freshness is a short
+// relative age ("42s ago") shown at the foot, or "" to omit it.
+func Sidebar(active, eventName string, focused bool, freshness string) string {
+	lines, _ := buildSidebar(active, eventName, focused, freshness)
 	return strings.Join(lines, "\n")
 }
 
 // SidebarRoutes maps a sidebar text-line index to the route on that line (for
 // mouse clicks). Only depends on whether an event is in focus.
 func SidebarRoutes(eventName string) map[int]string {
-	_, routes := buildSidebar("", eventName, false)
+	_, routes := buildSidebar("", eventName, false, "")
 	return routes
 }
 

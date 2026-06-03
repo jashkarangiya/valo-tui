@@ -423,7 +423,7 @@ func (m Model) View() tea.View {
 		BorderRight(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(styles.Border).
-		Render(widgets.Sidebar(m.route, m.eventName, m.navFocus))
+		Render(widgets.Sidebar(m.route, m.eventName, m.navFocus, data.Freshness()))
 
 	content := lipgloss.NewStyle().
 		Width(m.w-6-sidebarTotal).Height(innerH).MaxHeight(innerH).

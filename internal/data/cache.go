@@ -133,8 +133,8 @@ func EventByID(id int) (EventCard, bool) {
 	return EventCard{}, false
 }
 
-// LastUpdated is the most recent write across the polling keys, as HH:MM:SS.
-func LastUpdated() string {
+// lastUpdatedTime is the most recent write across the polling keys (zero if none).
+func lastUpdatedTime() time.Time {
 	var latest time.Time
 	for _, key := range []string{"matches:live", "matches:upcoming", "events:active"} {
 		_, ts := getRaw(key)
@@ -145,10 +145,36 @@ func LastUpdated() string {
 			latest = t
 		}
 	}
+	return latest
+}
+
+// LastUpdated is the most recent write across the polling keys, as HH:MM:SS.
+func LastUpdated() string {
+	latest := lastUpdatedTime()
 	if latest.IsZero() {
 		return ""
 	}
 	return latest.UTC().Format("15:04:05")
+}
+
+// Freshness is the age of the newest cached data as a short relative string
+// ("42s ago" / "3m ago" / "2h ago"), or "" when the cache is empty.
+func Freshness() string {
+	latest := lastUpdatedTime()
+	if latest.IsZero() {
+		return ""
+	}
+	d := time.Since(latest)
+	switch {
+	case d < 0:
+		return "just now"
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
 }
 
 // getObject decodes a kv value known to be a JSON object.
