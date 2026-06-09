@@ -29,6 +29,14 @@ func New() *Client {
 	}
 }
 
+// NewWithBase returns a client pointed at a custom base URL, for tests that
+// serve fixtures from a local httptest server.
+func NewWithBase(base string) *Client {
+	c := New()
+	c.base = base
+	return c
+}
+
 // get fetches a path (e.g. "/matches") and returns the response body.
 func (c *Client) get(path string) (io.ReadCloser, error) {
 	req, err := http.NewRequest(http.MethodGet, c.base+path, nil)

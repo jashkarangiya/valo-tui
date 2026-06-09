@@ -157,6 +157,39 @@ func LastUpdated() string {
 	return latest.UTC().Format("15:04:05")
 }
 
+// staleAfter is how old the newest live write may get before we treat the
+// cache as stale — a generous multiple of the fastest fetch cadence, so a
+// briefly-slow fetcher doesn't trip a false alarm but a dead one does.
+const staleAfter = 3 * time.Minute
+
+// FreshnessState returns the freshness label plus whether the cache is stale
+// (newest live write older than staleAfter), i.e. the fetcher is likely down.
+func FreshnessState() (label string, stale bool) {
+	latest := lastUpdatedTime()
+	if latest.IsZero() {
+		return "", false
+	}
+	return Freshness(), time.Since(latest) > staleAfter
+}
+
+// FetchError returns the fetcher's last-recorded error for the live polling
+// path (empty when the last run succeeded), and whether it is recent enough to
+// still be worth showing.
+func FetchError() (msg string, recent bool) {
+	obj := getObject("meta:fetch")
+	if obj == nil {
+		return "", false
+	}
+	msg = s(obj["error"])
+	if msg == "" {
+		return "", false
+	}
+	if ts, err := time.Parse(time.RFC3339, s(obj["updated_at"])); err == nil {
+		recent = time.Since(ts) < 10*time.Minute
+	}
+	return msg, recent
+}
+
 // Freshness is the age of the newest cached data as a short relative string
 // ("42s ago" / "3m ago" / "2h ago"), or "" when the cache is empty.
 func Freshness() string {

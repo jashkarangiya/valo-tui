@@ -30,12 +30,30 @@ The cache lives at `~/.cache/valo-tui/cache.db` by default; override with the
 # Build the binaries
 go build -o bin/ ./cmd/...
 
-# Seed the cache with sample data (until the Go fetcher lands)
-go run ./cmd/valo-seed
+# Populate the cache from vlr.gg (one-shot), or seed sample data offline
+go run ./cmd/valo-fetcher --once     # live scrape
+go run ./cmd/valo-seed               # offline sample data
 
 # Run the TUI locally
 go run ./cmd/valo-tui
 ```
+
+### Keep the cache fresh (fetcher)
+
+```bash
+# Poll vlr.gg on per-key cadences (live fast, results/events/detail slower).
+go run ./cmd/valo-fetcher --watch --interval 30s
+
+# Override any cadence per deployment:
+go run ./cmd/valo-fetcher --watch \
+  --interval 20s --series-interval 45s --results-interval 5m --events-interval 20m
+```
+
+Live scores, completed results, the events list and per-event match lists, and
+the per-match broadcast detail (`series:{id}`) are each refreshed on their own
+ticker. The TUI re-reads the visible screen every 15s and shows a freshness
+indicator (`↻ 42s ago`) in the rail, flipping to a `⚠ stale` / `⚠ fetch
+failing` warning when the fetcher falls behind or errors.
 
 ### Serve over SSH (Wish)
 
@@ -58,7 +76,7 @@ internal/
   widgets/        sidebar, match_line
   styles/         palette + lipgloss styles
   data/           read-side SQLite cache
-  vlr/            vlr.gg client (planned — the Go fetcher)
+  vlr/            vlr.gg scraper (matches, events, event matches, match detail)
 ```
 
 ## Navigation
@@ -86,12 +104,15 @@ event sub-pages — overview, results, fixtures, standings, bracket (ASCII
 double-elim tree) and teams — all reading from the SQLite cache, plus the Wish
 SSH server.
 
-The one piece still pending is the **vlr.gg fetcher** (`internal/vlr` +
-`cmd/valo-fetcher`); until it lands, populate the cache with `cmd/valo-seed`.
+The **vlr.gg fetcher** (`internal/vlr` + `cmd/valo-fetcher`) is live: it scrapes
+the matches/results/events listings, each active event's match list, and the
+full per-match scoreboard (vetoes, per-map stats, round momentum) into the
+cache. `cmd/valo-seed` remains for offline/demo use.
 
 ## Roadmap
 
 1. ~~Go scaffold · SSH server · splash + global live~~ ✅
 2. ~~Flat screens (home, events, about, match detail)~~ ✅
 3. ~~Event sub-pages (overview, results, fixtures, standings, bracket, teams)~~ ✅
-4. Build the vlr.gg fetcher in Go (`internal/vlr` + `cmd/valo-fetcher`).
+4. ~~Build the vlr.gg fetcher in Go (`internal/vlr` + `cmd/valo-fetcher`)~~ ✅
+5. Deploy: long-running fetcher + shared-SSH TUI host.
