@@ -21,3 +21,6 @@ type CloseOverlayMsg struct{}
 // OpenBracketMsg asks the root to focus the named event and open its bracket
 // (emitted from the match-detail [b] binding).
 type OpenBracketMsg struct{ EventName string }
+
+// OpenRosterMsg asks the root to open the roster overlay for a team name.
+type OpenRosterMsg struct{ TeamName string }

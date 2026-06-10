@@ -32,6 +32,7 @@ type SeriesInfo struct {
 }
 
 type SeriesTeam struct {
+	ID    int    `json:"id"`
 	Name  string `json:"name"`
 	Short string `json:"short"`
 }
@@ -108,9 +109,20 @@ func parseSeries(r io.Reader, matchID int) (Series, error) {
 
 	info := SeriesInfo{MatchID: matchID}
 
-	// Team names (the two header links).
-	doc.Find(".match-header-link-name .wf-title-med").EachWithBreak(func(_ int, s *goquery.Selection) bool {
-		info.Teams = append(info.Teams, SeriesTeam{Name: norm(s.Text())})
+	// The two header links carry each team's name and its /team/{id} link, which
+	// is how a clicked team name later resolves to its roster page.
+	doc.Find("a.match-header-link").EachWithBreak(func(_ int, a *goquery.Selection) bool {
+		name := norm(a.Find(".wf-title-med").First().Text())
+		if name == "" {
+			return len(info.Teams) < 2
+		}
+		id := 0
+		if href, ok := a.Attr("href"); ok {
+			if m := teamIDRe.FindStringSubmatch(href); m != nil {
+				id, _ = strconv.Atoi(m[1])
+			}
+		}
+		info.Teams = append(info.Teams, SeriesTeam{ID: id, Name: name})
 		return len(info.Teams) < 2
 	})
 
@@ -305,6 +317,9 @@ func parseVeto(note string) []MapAction {
 
 // bestOfRe matches a best-of label ("Bo1" / "Bo3" / "Bo5").
 var bestOfRe = regexp.MustCompile(`(?i)^Bo\d+$`)
+
+// teamIDRe pulls the numeric id out of a /team/{id}/{slug} href.
+var teamIDRe = regexp.MustCompile(`/team/(\d+)`)
 
 // classifyNotes sorts the header vs-notes by content into (bestOf, status,
 // remaining). Order varies by match state, so we match on what each note is,

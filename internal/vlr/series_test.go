@@ -48,6 +48,9 @@ func TestParseSeries(t *testing.T) {
 	if s.Info.Teams[0].Short == "" || s.Info.Teams[1].Short == "" {
 		t.Errorf("team shorts not backfilled: %+v", s.Info.Teams)
 	}
+	if s.Info.Teams[0].ID == 0 || s.Info.Teams[1].ID == 0 {
+		t.Errorf("team ids not captured (needed for roster lookup): %+v", s.Info.Teams)
+	}
 	if len(s.Info.Score) != 2 {
 		t.Errorf("expected a 2-element series score, got %v", s.Info.Score)
 	}
