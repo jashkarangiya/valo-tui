@@ -1,0 +1,30 @@
+# The single vlr.gg poller. One per host — it is the ONLY process that talks to
+# vlr.gg, so any number of SSH users cost the site nothing. Writes the shared
+# SQLite cache the TUI reads.
+#
+#   sudo cp deploy/valo-fetcher.service /etc/systemd/system/
+#   sudo systemctl enable --now valo-fetcher
+[Unit]
+Description=valo-tui fetcher (vlr.gg -> SQLite cache)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=valo
+Environment=VALO_TUI_DB=/var/lib/valo-tui/cache.db
+ExecStart=/usr/local/bin/valo-fetcher --watch --interval 30s
+Restart=always
+RestartSec=10
+# Be a good neighbour: if vlr.gg ever pushes back, the client already backs off;
+# systemd just keeps the daemon alive across crashes/reboots.
+
+# Hardening (the fetcher needs only its cache dir + outbound network).
+StateDirectory=valo-tui
+ProtectSystem=strict
+ReadWritePaths=/var/lib/valo-tui
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

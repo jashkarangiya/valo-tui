@@ -32,6 +32,9 @@ func main() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(".ssh/id_ed25519"),
+		// Drop idle/abandoned connections so the public front door can't be tied
+		// up: the TUI is read-only, so the only abuse vector is connection count.
+		wish.WithIdleTimeout(15*time.Minute),
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 			activeterm.Middleware(), // Bubble Tea needs a PTY
