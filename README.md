@@ -115,4 +115,4 @@ cache. `cmd/valo-seed` remains for offline/demo use.
 2. ~~Flat screens (home, events, about, match detail)~~ ✅
 3. ~~Event sub-pages (overview, results, fixtures, standings, bracket, teams)~~ ✅
 4. ~~Build the vlr.gg fetcher in Go (`internal/vlr` + `cmd/valo-fetcher`)~~ ✅
-5. Deploy: long-running fetcher + shared-SSH TUI host.
+5. Deploy: long-running fetcher + shared-SSH TUI host — see [deploy/](deploy/).

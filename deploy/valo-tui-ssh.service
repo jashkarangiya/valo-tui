@@ -1,0 +1,32 @@
+# The public SSH front door (Wish). Reads the same SQLite cache the fetcher
+# writes — read-only, so many concurrent users never contend with the writer.
+#
+#   sudo cp deploy/valo-tui-ssh.service /etc/systemd/system/
+#   sudo systemctl enable --now valo-tui-ssh
+#
+# Point DNS (e.g. valo.example.com) at this host and bind to :22, OR keep the
+# host's real sshd on 22 and run this on a dedicated port your users connect to:
+#   ssh -p 23234 valo.example.com
+[Unit]
+Description=valo-tui SSH server (Wish)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=valo
+WorkingDirectory=/var/lib/valo-tui
+Environment=VALO_TUI_DB=/var/lib/valo-tui/cache.db
+ExecStart=/usr/local/bin/valo-tui-ssh
+Restart=always
+RestartSec=10
+
+# Hardening — read-only TUI; it needs its host key + the cache.
+StateDirectory=valo-tui
+ProtectSystem=strict
+ReadWritePaths=/var/lib/valo-tui
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
