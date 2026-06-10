@@ -285,7 +285,10 @@ func (m MatchDetail) scoreboard(mp data.MapScore) string {
 		colour color.Color
 	}{{mp.Team1Short, team1Col}, {mp.Team2Short, team2Col}}
 
-	hdr := mutedSt.Render(fmt.Sprintf("%-15s%4s %3s %3s %3s %5s %4s", "", "acs", "k", "d", "a", "adr", "hs"))
+	// Pad the label gutter to the player rows' name+agent prefix so the column
+	// headers sit directly over their values: 4 indent + 12 name + 1 + glyph(1)
+	// + 1 + 8 agent = 27, and the stats block leads with a space ⇒ 28.
+	hdr := mutedSt.Render(fmt.Sprintf("%-28s%4s %3s %3s %3s %5s %4s", "", "acs", "k", "d", "a", "adr", "hs"))
 	var b strings.Builder
 	for _, t := range teams {
 		var tp []data.PlayerLine
