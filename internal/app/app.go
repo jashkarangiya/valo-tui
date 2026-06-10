@@ -48,6 +48,7 @@ type Model struct {
 	eventName string
 
 	overlay *screens.MatchDetail // non-nil ⇒ match-detail overlay is open
+	roster  *screens.RosterDetail // non-nil ⇒ roster overlay is open (stacks on top)
 
 	splash    screens.Splash
 	home      screens.Home
@@ -125,7 +126,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case refreshTickMsg:
 		// Re-read the visible screen from the cache, then re-arm the ticker.
-		if m.route != "splash" && m.overlay == nil {
+		if m.route != "splash" && m.overlay == nil && m.roster == nil {
 			m.loadRoute(m.route)
 		}
 		return m, refreshTick()
@@ -151,7 +152,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case screens.CloseOverlayMsg:
-		m.overlay = nil
+		// Close the topmost layer: roster sits above the match-detail overlay.
+		if m.roster != nil {
+			m.roster = nil
+		} else {
+			m.overlay = nil
+		}
+		return m, nil
+
+	case screens.OpenRosterMsg:
+		m.openRoster(msg.TeamName)
 		return m, nil
 
 	case screens.OpenBracketMsg:
@@ -187,6 +197,9 @@ func (m *Model) resize(w, h int) {
 	if m.overlay != nil {
 		m.overlay.SetSize(w-10, ch)
 	}
+	if m.roster != nil {
+		m.roster.SetSize(w-10, ch)
+	}
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -197,7 +210,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Overlay takes precedence when open.
+	// Roster overlay is the topmost layer when open.
+	if m.roster != nil {
+		var cmd tea.Cmd
+		r, c := m.roster.Update(msg)
+		*m.roster = r
+		cmd = c
+		return m, cmd
+	}
+
+	// Match-detail overlay takes precedence over the shell.
 	if m.overlay != nil {
 		var cmd tea.Cmd
 		o, c := m.overlay.Update(msg)
@@ -289,9 +311,17 @@ func (m Model) handleContentKey(msg tea.KeyPressMsg, key string) (tea.Model, tea
 			m.standings, _ = m.standings.Update(msg)
 			return m, nil
 		}
+		if key == "enter" {
+			m.openRoster(m.standings.SelectedTeam())
+			return m, nil
+		}
 	case "teams":
 		if move {
 			m.teams, _ = m.teams.Update(msg)
+			return m, nil
+		}
+		if key == "enter" {
+			m.openRoster(m.teams.SelectedTeam())
 			return m, nil
 		}
 	}
@@ -414,6 +444,17 @@ func (m *Model) openDetail(matchID int) {
 	m.overlay = &md
 }
 
+// openRoster opens the roster overlay for a team name (stacking above any
+// match-detail overlay it was launched from).
+func (m *Model) openRoster(name string) {
+	if name == "" || name == "TBD" {
+		return
+	}
+	_, ch := contentSize(m.w, m.h)
+	rd := screens.NewRosterDetail(name, m.w-10, ch)
+	m.roster = &rd
+}
+
 // maybeLiveInit (re)starts the dashboard refresh loop when entering live.
 func (m Model) maybeLiveInit() tea.Cmd {
 	if m.route == "live" {
@@ -430,12 +471,12 @@ func (m Model) View() tea.View {
 	}
 	innerH := m.h - 4 // shell height inside the frame (margin 2 + border 2)
 
-	// Match-detail overlay fills the same framed area as the shell.
+	// Overlays fill the same framed area as the shell. Roster sits on top.
+	if m.roster != nil {
+		return altScreen(styles.Frame.Margin(1, 2).Render(m.overlayBox(m.roster.View(), innerH)))
+	}
 	if m.overlay != nil {
-		inner := lipgloss.NewStyle().
-			Width(m.w-6).Height(innerH).MaxHeight(innerH).Padding(1, 2).
-			Render(m.overlay.View())
-		return altScreen(styles.Frame.Margin(1, 2).Render(inner))
+		return altScreen(styles.Frame.Margin(1, 2).Render(m.overlayBox(m.overlay.View(), innerH)))
 	}
 
 	sidebar := lipgloss.NewStyle().
@@ -463,6 +504,15 @@ func cacheHealth() widgets.Health {
 		errMsg = ""
 	}
 	return widgets.Health{Freshness: fresh, Stale: stale, FetchErr: errMsg}
+}
+
+// overlayBox renders overlay content into the same padded framed area as the
+// shell, so match-detail and roster overlays share one layout (and one
+// click-coordinate origin).
+func (m Model) overlayBox(content string, innerH int) string {
+	return lipgloss.NewStyle().
+		Width(m.w-6).Height(innerH).MaxHeight(innerH).Padding(1, 2).
+		Render(content)
 }
 
 func (m Model) content() string {
@@ -510,7 +560,17 @@ func (m Model) handleClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 	if m.route == "splash" {
 		return m, func() tea.Msg { return screens.EnterAppMsg{} }
 	}
+	// Roster overlay (topmost) swallows clicks; any click dismisses nothing —
+	// use esc.
+	if m.roster != nil {
+		return m, nil
+	}
+	// Match-detail overlay: a click on a header team name opens its roster.
+	// Overlay text origin = frame margin 2 + border 1 + padding 2 = x5, y3.
 	if m.overlay != nil {
+		if name, ok := m.overlay.TeamAt(mo.X-5, mo.Y-3); ok {
+			m.openRoster(name)
+		}
 		return m, nil
 	}
 
@@ -545,9 +605,13 @@ func (m Model) handleClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "standings":
-			m.standings.ClickVisual(visual)
+			if name, ok := m.standings.ClickVisual(visual); ok {
+				m.openRoster(name)
+			}
 		case "teams":
-			m.teams.ClickVisual(visual)
+			if name, ok := m.teams.ClickVisual(visual); ok {
+				m.openRoster(name)
+			}
 		}
 	}
 	return m, nil

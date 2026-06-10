@@ -43,6 +43,7 @@ func main() {
 		fetchEvents(db, client)
 		fetchLiveSeries(db, client)
 		backfillSeries(db, client)
+		fetchRosters(db, client)
 		return
 	}
 
@@ -62,6 +63,7 @@ func main() {
 	fetchEvents(db, client)
 	fetchLiveSeries(db, client)
 	backfillSeries(db, client)
+	fetchRosters(db, client)
 
 	matchesT := time.NewTicker(matchEvery)
 	seriesT := time.NewTicker(seriesEvery)
@@ -85,6 +87,7 @@ func main() {
 			backfillSeries(db, client)
 		case <-eventsT.C:
 			fetchEvents(db, client)
+			fetchRosters(db, client)
 		case <-stop:
 			log.Println("stopping")
 			return
@@ -228,6 +231,89 @@ func writeSeries(db *sql.DB, client *vlr.Client, id int) bool {
 	}
 	if err := writeKey(db, fmt.Sprintf("series:%d", id), payload); err != nil {
 		log.Printf("write series:%d: %v", id, err)
+		return false
+	}
+	indexTeams(db, s.Info.Teams)
+	return true
+}
+
+// indexTeams merges scraped (team name → /team/{id}) pairs into teams:index, so
+// a clicked team name anywhere in the UI can resolve to its roster. Read-merge-
+// write is safe: the fetcher's select loop is single-goroutine.
+func indexTeams(db *sql.DB, teams []vlr.SeriesTeam) {
+	idx := map[string]int{}
+	var cur string
+	if err := db.QueryRow("SELECT value FROM kv WHERE key='teams:index'").Scan(&cur); err == nil {
+		_ = json.Unmarshal([]byte(cur), &idx)
+	}
+	changed := false
+	for _, t := range teams {
+		if t.ID == 0 || t.Name == "" {
+			continue
+		}
+		if idx[t.Name] != t.ID {
+			idx[t.Name] = t.ID
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	if payload, err := json.Marshal(idx); err == nil {
+		if err := writeKey(db, "teams:index", payload); err != nil {
+			log.Printf("write teams:index: %v", err)
+		}
+	}
+}
+
+// rosterCap bounds how many team rosters we fetch per pass. Rosters change
+// rarely, so each team is fetched once and skipped after; new teams fill in over
+// subsequent passes on the slow (events) cadence.
+const rosterCap = 20
+
+// fetchRosters fetches team:{id} for indexed teams that don't have a cached
+// roster yet, capped per pass.
+func fetchRosters(db *sql.DB, client *vlr.Client) {
+	var raw string
+	if err := db.QueryRow("SELECT value FROM kv WHERE key='teams:index'").Scan(&raw); err != nil {
+		return
+	}
+	idx := map[string]int{}
+	if json.Unmarshal([]byte(raw), &idx) != nil {
+		return
+	}
+	var ok, n int
+	for _, id := range idx {
+		if n >= rosterCap {
+			break
+		}
+		if hasKey(db, fmt.Sprintf("team:%d", id)) {
+			continue
+		}
+		n++
+		if writeRoster(db, client, id) {
+			ok++
+		}
+	}
+	if n > 0 {
+		log.Printf("rosters · %d/%d", ok, n)
+	}
+}
+
+// writeRoster scrapes one team page and upserts team:{id}. Reports success.
+func writeRoster(db *sql.DB, client *vlr.Client, id int) bool {
+	r, err := client.TeamRoster(id)
+	if err != nil {
+		log.Printf("team:%d: %v", id, err)
+		return false
+	}
+	payload, err := json.Marshal(r)
+	if err != nil {
+		log.Printf("marshal team:%d: %v", id, err)
+		return false
+	}
+	if err := writeKey(db, fmt.Sprintf("team:%d", id), payload); err != nil {
+		log.Printf("write team:%d: %v", id, err)
 		return false
 	}
 	return true

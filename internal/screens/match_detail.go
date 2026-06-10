@@ -42,6 +42,19 @@ func NewMatchDetail(matchID, w, h int) MatchDetail {
 
 func (m *MatchDetail) SetSize(w, h int) { m.w, m.h = w, h }
 
+// TeamAt returns the team name for a click at overlay-local (x, y), so the
+// header names open a roster. Only the unscrolled header band is hot; the
+// left/right half of the width picks the team (names sit either side of "vs").
+func (m MatchDetail) TeamAt(x, y int) (string, bool) {
+	if !m.ok || m.scroll != 0 || y > 5 {
+		return "", false
+	}
+	if x < m.w/2 {
+		return m.detail.Team1.Name, true
+	}
+	return m.detail.Team2.Name, true
+}
+
 func (m MatchDetail) hasBracket() bool {
 	if !m.ok {
 		return false
@@ -89,9 +102,9 @@ func (m MatchDetail) View() string {
 	}
 	end := min(len(lines), m.scroll+visible)
 	view := strings.Join(lines[m.scroll:end], "\n")
-	footer := mutedSt.Render("j/k scroll · esc back")
+	footer := mutedSt.Render("j/k scroll · click team → roster · esc back")
 	if m.hasBracket() {
-		footer = mutedSt.Render("j/k scroll · b bracket · esc back")
+		footer = mutedSt.Render("j/k scroll · b bracket · click team → roster · esc back")
 	}
 	return view + "\n" + footer
 }
