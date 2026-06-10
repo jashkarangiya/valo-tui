@@ -47,7 +47,7 @@ type Model struct {
 	eventID   int    // 0 ⇒ global scope
 	eventName string
 
-	overlay *screens.MatchDetail // non-nil ⇒ match-detail overlay is open
+	overlay *screens.MatchDetail  // non-nil ⇒ match-detail overlay is open
 	roster  *screens.RosterDetail // non-nil ⇒ roster overlay is open (stacks on top)
 
 	splash    screens.Splash
@@ -544,8 +544,8 @@ func (m Model) content() string {
 func altScreen(content string) tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion     // report clicks so the rail/tables are clickable
-	v.BackgroundColor = styles.BG             // force the Valorant dark navy for an immersive, on-brand look
+	v.MouseMode = tea.MouseModeCellMotion // report clicks so the rail/tables are clickable
+	v.BackgroundColor = styles.BG         // force the Valorant dark navy for an immersive, on-brand look
 	return v
 }
 
@@ -587,8 +587,25 @@ func (m Model) handleClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Click in a content table → select that row (and drill where it makes sense).
+	// Click in the content area.
 	if mo.X >= sidebarRight {
+		// Dashboards render team names mid-line; a click on one opens its roster.
+		// Their View origin is the content text cell (sidebar + content padding).
+		contentLeft := sidebarRight + 2
+		switch m.route {
+		case "home":
+			if name, ok := m.home.TeamAt(mo.X-contentLeft, mo.Y-textTop); ok {
+				m.openRoster(name)
+				return m, nil
+			}
+		case "live":
+			if name, ok := m.live.TeamAt(mo.X-contentLeft, mo.Y-textTop); ok {
+				m.openRoster(name)
+				return m, nil
+			}
+		}
+
+		// Otherwise: select that table row (and drill where it makes sense).
 		m.focusContent()
 		visual := mo.Y - tableTop
 		switch m.route {

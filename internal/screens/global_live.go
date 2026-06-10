@@ -95,48 +95,152 @@ func (g GlobalLive) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, intl, top, bot)
 }
 
-func (g GlobalLive) renderIntl() string {
-	muted := lipgloss.NewStyle().Foreground(styles.Muted)
-	if len(g.intl) == 0 {
-		return styles.IntlBar.Width(g.w - 2).Render(
-			muted.Render("★ international · no active international events"))
+// liveLine is one rendered dashboard line plus the match it shows (nil for
+// headers), so clicks can be mapped back to a team.
+type liveLine struct {
+	text  string
+	match *data.MatchCard
+}
+
+// joinLines stacks the lines, truncating each to w columns so none wraps —
+// wrapping would desync the visual rows from the logical lines that TeamAt's
+// hit-testing relies on (and orphaned "PM" fragments look bad anyway).
+func joinLines(ls []liveLine, w int) string {
+	trunc := lipgloss.NewStyle().MaxWidth(w)
+	texts := make([]string, len(ls))
+	for i, l := range ls {
+		texts[i] = trunc.Render(l.text)
 	}
-	lines := []string{lipgloss.NewStyle().Foreground(styles.Live).Bold(true).Render("★ international")}
+	return strings.Join(texts, "\n")
+}
+
+// regionContentW is the text width inside a region panel: half minus its border
+// (2) and padding (2).
+func (g GlobalLive) regionContentW() int {
+	half := g.w/2 - 1
+	if half < 10 {
+		half = 10
+	}
+	if w := half - 4; w > 1 {
+		return w
+	}
+	return 1
+}
+
+func (g GlobalLive) intlLines() []liveLine {
+	if len(g.intl) == 0 {
+		return []liveLine{{text: lipgloss.NewStyle().Foreground(styles.Muted).
+			Render("★ international · no active international events")}}
+	}
+	out := []liveLine{{text: lipgloss.NewStyle().Foreground(styles.Live).Bold(true).Render("★ international")}}
 	for i, m := range g.intl {
 		if i >= 5 {
 			break
 		}
-		lines = append(lines, widgets.MatchLine(m))
+		mc := m
+		out = append(out, liveLine{text: widgets.MatchLine(m), match: &mc})
 	}
-	return styles.IntlBar.Width(g.w - 2).Render(strings.Join(lines, "\n"))
+	return out
 }
 
-func (g GlobalLive) renderRegion(region string) string {
+func (g GlobalLive) renderIntl() string {
+	return styles.IntlBar.Width(g.w - 2).Render(joinLines(g.intlLines(), g.w-6))
+}
+
+func (g GlobalLive) regionLines(region string) []liveLine {
 	slots := g.regions[region]
 	muted := lipgloss.NewStyle().Foreground(styles.Muted)
 	live := lipgloss.NewStyle().Foreground(styles.Live)
 
-	lines := []string{lipgloss.NewStyle().Foreground(styles.Text).Bold(true).Render(region)}
+	out := []liveLine{{text: lipgloss.NewStyle().Foreground(styles.Text).Bold(true).Render(region)}}
 	if slots == nil || (len(slots.Live)+len(slots.Next)+len(slots.Recent) == 0) {
-		lines = append(lines, muted.Render("no matches tracked"))
-		return strings.Join(lines, "\n")
+		out = append(out, liveLine{text: muted.Render("no matches tracked")})
+		return out
 	}
 	add := func(header string, hs lipgloss.Style, ms []data.MatchCard) {
 		if len(ms) == 0 {
 			return
 		}
-		lines = append(lines, hs.Render(header))
+		out = append(out, liveLine{text: hs.Render(header)})
 		for i, m := range ms {
 			if i >= maxPerSlot {
 				break
 			}
-			lines = append(lines, widgets.MatchLine(m))
+			mc := m
+			out = append(out, liveLine{text: widgets.MatchLine(m), match: &mc})
 		}
 	}
 	add("── live ──", live, slots.Live)
 	add("── next ──", muted, slots.Next)
 	add("── recent ──", muted, slots.Recent)
-	return strings.Join(lines, "\n")
+	return out
+}
+
+func (g GlobalLive) renderRegion(region string) string {
+	return joinLines(g.regionLines(region), g.regionContentW())
+}
+
+// boxContent is the (x, y) offset to a bordered box's first content cell:
+// RoundedBorder (1) + Padding(0,1) ⇒ left 2, top 1. Card and IntlBar share it.
+const (
+	boxContentX = 2
+	boxContentY = 1
+)
+
+// TeamAt maps a View-local (x, y) click to the team name under it, mirroring
+// View()'s layout. Heights/widths are measured from the rendered boxes so this
+// stays correct without re-deriving lipgloss's border/padding math.
+func (g GlobalLive) TeamAt(x, y int) (string, bool) {
+	titleH := lipgloss.Height(styles.PageTitle.Render("global live"))
+	intlH := lipgloss.Height(g.renderIntl())
+
+	// International bar.
+	if y >= titleH && y < titleH+intlH {
+		return hitLines(g.intlLines(), x-boxContentX, y-titleH-boxContentY)
+	}
+
+	half := g.w/2 - 1
+	if half < 10 {
+		half = 10
+	}
+	rowH := (g.h - 5) / 2
+	if rowH < 4 {
+		rowH = 4
+	}
+	panel := func(region string) string {
+		card := styles.Card
+		if g.regionHasLive(region) {
+			card = styles.CardLive
+		}
+		return card.Width(half).Height(rowH).Render(g.renderRegion(region))
+	}
+	leftW := lipgloss.Width(panel("Americas"))
+	panelH := lipgloss.Height(panel("Americas"))
+	topY := titleH + intlH
+
+	hitRow := func(left, right string, baseY int) (string, bool) {
+		region, ox := left, 0
+		if x >= leftW {
+			region, ox = right, leftW
+		}
+		return hitLines(g.regionLines(region), x-ox-boxContentX, y-baseY-boxContentY)
+	}
+	switch {
+	case y >= topY && y < topY+panelH:
+		return hitRow("Americas", "EMEA", topY)
+	case y >= topY+panelH && y < topY+2*panelH:
+		return hitRow("Pacific", "China", topY+panelH)
+	}
+	return "", false
+}
+
+// hitLines returns the team name at content-local (col, row) within a list of
+// rendered lines, or ok=false if the row isn't a match line / col misses a name.
+func hitLines(lines []liveLine, col, row int) (string, bool) {
+	if row < 0 || row >= len(lines) || lines[row].match == nil {
+		return "", false
+	}
+	return widgets.MatchLineHit(*lines[row].match, col)
 }
 
 // IsLive reports whether the dashboard currently has any live match — used to

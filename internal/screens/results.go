@@ -15,18 +15,19 @@ var resultOrder = map[string]int{"live": 0, "completed": 1}
 // Results is the [r] event sub-page: completed & live series. Enter drills into
 // the per-map scoreboards.
 type Results struct {
-	w, h    int
-	table   widgets.Table
-	hasEvt  bool
+	w, h   int
+	table  widgets.Table
+	hasEvt bool
 }
 
 func NewResults(w, h int) Results {
 	return Results{w: w, h: h, table: widgets.NewTable(
-		widgets.Column{Title: "status", Width: 7},
-		widgets.Column{Title: "match", Width: 34},
-		widgets.Column{Title: "score", Width: 7},
-		widgets.Column{Title: "phase", Width: 20},
-		widgets.Column{Title: "when", Width: 14},
+		widgets.Column{Title: "status", Width: 6},
+		widgets.Column{Title: "team 1", Width: 18},
+		widgets.Column{Title: "score", Width: 5},
+		widgets.Column{Title: "team 2", Width: 18},
+		widgets.Column{Title: "phase", Width: 15},
+		widgets.Column{Title: "when", Width: 12},
 	)}
 }
 
@@ -69,12 +70,22 @@ func (s *Results) Load(eventID int, eventName string) {
 		if when == "" {
 			when = m.Date
 		}
+		// Dim the losing side of a completed match so the winner reads at a glance.
+		t1Style, t2Style := textSt, textSt
+		if m.Status == "completed" {
+			if a, b := derefOr0(m.Team1.Score), derefOr0(m.Team2.Score); a > b {
+				t2Style = mutedSt
+			} else if b > a {
+				t1Style = mutedSt
+			}
+		}
 		rows = append(rows, widgets.Row{
 			Key: fmt.Sprint(m.MatchID),
 			Cells: []widgets.Cell{
 				status,
-				{Text: m.Team1.Name + "  vs  " + m.Team2.Name, Style: textSt},
+				{Text: m.Team1.Name, Style: t1Style},
 				{Text: s1 + "–" + s2, Style: scoreStyle},
+				{Text: m.Team2.Name, Style: t2Style},
 				{Text: m.Phase, Style: mutedSt},
 				{Text: when, Style: mutedSt},
 			},

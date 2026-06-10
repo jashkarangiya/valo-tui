@@ -4,6 +4,7 @@ package widgets
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 
@@ -151,6 +152,22 @@ func MatchLine(m data.MatchCard) string {
 	t1 := clip(m.Team1.Name, 12)
 	t2 := clip(m.Team2.Name, 12)
 	return dot + t1 + " " + mutedS.Render("vs") + " " + t2 + "  " + score
+}
+
+// MatchLineHit maps a rune column within a MatchLine to the full team name it
+// covers, so a click on either side of "vs" opens that team's roster. The line
+// is: dot(2) + t1 + " vs " (4) + t2 + …, with each name clipped to 12.
+func MatchLineHit(m data.MatchCard, col int) (string, bool) {
+	lt1 := utf8.RuneCountInString(clip(m.Team1.Name, 12))
+	lt2 := utf8.RuneCountInString(clip(m.Team2.Name, 12))
+	n2start := 2 + lt1 + 4 // dot + t1 + " vs "
+	switch {
+	case col >= 2 && col < 2+lt1:
+		return m.Team1.Name, true
+	case col >= n2start && col < n2start+lt2:
+		return m.Team2.Name, true
+	}
+	return "", false
 }
 
 func scoreOf(m data.MatchCard) string {
