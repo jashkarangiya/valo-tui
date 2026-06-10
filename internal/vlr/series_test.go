@@ -5,6 +5,28 @@ import (
 	"testing"
 )
 
+func TestClassifyNotes(t *testing.T) {
+	cases := []struct {
+		notes                    []string
+		bestOf, status, remaining string
+	}{
+		{[]string{"final", "Bo3"}, "Bo3", "final", ""},   // completed
+		{[]string{"Bo3"}, "Bo3", "", ""},                 // upcoming, no timer
+		{[]string{"18h 0m", "Bo3"}, "Bo3", "", "18h 0m"}, // upcoming w/ countdown
+		{[]string{"Bo3", "1d 9h"}, "Bo3", "", "1d 9h"},   // countdown after best-of
+		{[]string{"live", "Bo5"}, "Bo5", "live", ""},     // live
+		{[]string{"Bo1"}, "Bo1", "", ""},                 // Bo1
+		{nil, "", "", ""},                                // nothing
+	}
+	for _, c := range cases {
+		bo, st, rem := classifyNotes(c.notes)
+		if bo != c.bestOf || st != c.status || rem != c.remaining {
+			t.Errorf("classifyNotes(%v) = (%q,%q,%q), want (%q,%q,%q)",
+				c.notes, bo, st, rem, c.bestOf, c.status, c.remaining)
+		}
+	}
+}
+
 func TestParseSeries(t *testing.T) {
 	f, err := os.Open("testdata/match.html")
 	if err != nil {
