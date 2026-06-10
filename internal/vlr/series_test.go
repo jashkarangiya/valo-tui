@@ -7,7 +7,7 @@ import (
 
 func TestClassifyNotes(t *testing.T) {
 	cases := []struct {
-		notes                    []string
+		notes                     []string
 		bestOf, status, remaining string
 	}{
 		{[]string{"final", "Bo3"}, "Bo3", "final", ""},   // completed
