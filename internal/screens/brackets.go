@@ -319,10 +319,10 @@ func (s *Bracket) SetSize(w, h int) { s.w, s.h = w, h }
 
 func (s *Bracket) Load(eventID int) {
 	s.hasEvt = eventID != 0
-	s.selCol, s.selRow = 0, 0
 	if !s.hasEvt {
 		s.bracket = data.Bracket{}
 		s.columns = nil
+		s.selCol, s.selRow = 0, 0
 		return
 	}
 	s.bracket = data.BracketFor(eventID)
@@ -330,6 +330,22 @@ func (s *Bracket) Load(eventID int) {
 	for _, sec := range s.bracket.Sections {
 		s.columns = append(s.columns, sec.Columns...)
 	}
+	// Preserve the cursor across periodic reloads, clamped to the new bounds.
+	s.selCol = clampIndex(s.selCol, len(s.columns))
+	if s.selCol < len(s.columns) {
+		s.selRow = clampIndex(s.selRow, len(s.columns[s.selCol].Matches))
+	}
+}
+
+// clampIndex keeps i within [0, n-1], returning 0 for an empty collection.
+func clampIndex(i, n int) int {
+	if i < 0 || n == 0 {
+		return 0
+	}
+	if i > n-1 {
+		return n - 1
+	}
+	return i
 }
 
 func (s *Bracket) selectedMatch() (data.BracketMatch, bool) {

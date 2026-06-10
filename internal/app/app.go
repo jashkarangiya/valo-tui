@@ -6,6 +6,7 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -101,13 +102,33 @@ func contentSize(w, h int) (int, int) {
 	return cw, ch
 }
 
-func (m Model) Init() tea.Cmd { return m.splash.Init() }
+// refreshInterval is how often the visible screen is re-read from the cache so
+// fetcher updates appear without manual navigation. It also keeps the "↻ Ns
+// ago" freshness indicator ticking.
+const refreshInterval = 15 * time.Second
+
+type refreshTickMsg struct{}
+
+func refreshTick() tea.Cmd {
+	return tea.Tick(refreshInterval, func(time.Time) tea.Msg { return refreshTickMsg{} })
+}
+
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(m.splash.Init(), refreshTick())
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 		return m, nil
+
+	case refreshTickMsg:
+		// Re-read the visible screen from the cache, then re-arm the ticker.
+		if m.route != "splash" && m.overlay == nil {
+			m.loadRoute(m.route)
+		}
+		return m, refreshTick()
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -423,7 +444,7 @@ func (m Model) View() tea.View {
 		BorderRight(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(styles.Border).
-		Render(widgets.Sidebar(m.route, m.eventName, m.navFocus, data.Freshness()))
+		Render(widgets.Sidebar(m.route, m.eventName, m.navFocus, cacheHealth()))
 
 	content := lipgloss.NewStyle().
 		Width(m.w-6-sidebarTotal).Height(innerH).MaxHeight(innerH).
@@ -432,6 +453,16 @@ func (m Model) View() tea.View {
 
 	shell := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
 	return altScreen(styles.Frame.Margin(1, 2).Render(shell))
+}
+
+// cacheHealth gathers the freshness/fetcher state for the rail footer.
+func cacheHealth() widgets.Health {
+	fresh, stale := data.FreshnessState()
+	errMsg, recent := data.FetchError()
+	if !recent {
+		errMsg = ""
+	}
+	return widgets.Health{Freshness: fresh, Stale: stale, FetchErr: errMsg}
 }
 
 func (m Model) content() string {

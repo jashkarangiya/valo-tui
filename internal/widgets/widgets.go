@@ -44,8 +44,16 @@ var (
 	textB   = lipgloss.NewStyle().Foreground(styles.Text).Bold(true)
 	ruleS   = lipgloss.NewStyle().Foreground(styles.Rule)
 	liveS   = lipgloss.NewStyle().Foreground(styles.Live)
+	warnS   = lipgloss.NewStyle().Foreground(styles.Accent)
 	rowSel  = lipgloss.NewStyle().Foreground(styles.Accent).Background(styles.SelBg).Bold(true)
 )
+
+// Health is the cache freshness/fetcher state shown at the foot of the rail.
+type Health struct {
+	Freshness string // relative age of the newest data ("42s ago"), "" if empty
+	Stale     bool   // newest data is old enough that the fetcher is likely down
+	FetchErr  string // last fetcher error, "" when the live path is healthy
+}
 
 // navRow renders one rail entry. The active page ALWAYS shows the › cursor and
 // a highlighted [key] + label so you can see where you are; when the rail holds
@@ -62,7 +70,7 @@ func navRow(it NavItem, active, focused bool) string {
 
 // buildSidebar is the single source of the rail layout: it returns the rendered
 // lines and a map from line index → route for click hit-testing.
-func buildSidebar(active, eventName string, focused bool, freshness string) ([]string, map[int]string) {
+func buildSidebar(active, eventName string, focused bool, health Health) ([]string, map[int]string) {
 	var lines []string
 	routes := map[int]string{}
 	add := func(s string) { lines = append(lines, s) }
@@ -93,24 +101,32 @@ func buildSidebar(active, eventName string, focused bool, freshness string) ([]s
 	add(mutedS.Render("enter  open"))
 	add(mutedS.Render("esc    back to rail"))
 	add(mutedS.Render("q      quit"))
-	if freshness != "" {
+	switch {
+	case health.FetchErr != "":
 		add("")
-		add(mutedS.Render("↻ " + freshness))
+		add(warnS.Render("⚠ fetch failing"))
+		add(warnS.Render(clip(health.FetchErr, 18)))
+	case health.Freshness != "" && health.Stale:
+		add("")
+		add(warnS.Render("⚠ " + health.Freshness + " · stale"))
+	case health.Freshness != "":
+		add("")
+		add(mutedS.Render("↻ " + health.Freshness))
 	}
 	return lines, routes
 }
 
-// Sidebar renders the nav rail for the current route. freshness is a short
-// relative age ("42s ago") shown at the foot, or "" to omit it.
-func Sidebar(active, eventName string, focused bool, freshness string) string {
-	lines, _ := buildSidebar(active, eventName, focused, freshness)
+// Sidebar renders the nav rail for the current route. health carries the cache
+// freshness/fetcher state shown at the foot of the rail.
+func Sidebar(active, eventName string, focused bool, health Health) string {
+	lines, _ := buildSidebar(active, eventName, focused, health)
 	return strings.Join(lines, "\n")
 }
 
 // SidebarRoutes maps a sidebar text-line index to the route on that line (for
 // mouse clicks). Only depends on whether an event is in focus.
 func SidebarRoutes(eventName string) map[int]string {
-	_, routes := buildSidebar("", eventName, false, "")
+	_, routes := buildSidebar("", eventName, false, Health{})
 	return routes
 }
 
