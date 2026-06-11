@@ -8,8 +8,11 @@
 #   sudo systemctl enable --now valo-tui-ssh
 #
 # Binds :22 for a bare `ssh valo.example.com`. In a dedicated container there is
-# no other sshd to conflict with. To use an unprivileged port instead, set
-# VALO_TUI_SSH_PORT=23234 and drop the AmbientCapabilities line.
+# no other sshd to conflict with. On bare metal / a VM this binds the low port
+# via the ambient CAP_NET_BIND_SERVICE below. Inside an unprivileged Proxmox LXC
+# that capability trips systemd's mount-namespace setup (status=226/NAMESPACE),
+# so ct-setup.sh drops it and lowers net.ipv4.ip_unprivileged_port_start instead.
+# To use an unprivileged port anywhere, set VALO_TUI_SSH_PORT=23234.
 [Unit]
 Description=valo-tui SSH server (Wish)
 After=network-online.target
@@ -26,6 +29,8 @@ Restart=always
 RestartSec=10
 
 # Bind privileged :22 as the unprivileged valo user — and grant nothing else.
+# (In an unprivileged LXC, ct-setup.sh removes these two lines and lowers the
+# port floor instead; see the header note.)
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
