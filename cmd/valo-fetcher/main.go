@@ -1,5 +1,6 @@
 // Command valo-fetcher scrapes vlr.gg and writes the SQLite cache the TUI
-// reads. Slice 1 populates matches:live.
+// reads: live/upcoming/completed matches, the events list and per-event match
+// lists, per-match scoreboards, and team rosters.
 //
 //	valo-fetcher --once
 //	valo-fetcher --watch --interval 30s
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -35,6 +37,7 @@ func main() {
 
 	db := openDB(resolveDB(*dbFlag))
 	defer db.Close()
+	migrateCache(db)
 	client := vlr.New()
 
 	if !*watch {
@@ -43,6 +46,8 @@ func main() {
 		fetchEvents(db, client)
 		fetchLiveSeries(db, client)
 		backfillSeries(db, client)
+		backfillEventSeries(db, client)
+		fetchRosters(db, client)
 		return
 	}
 
@@ -62,6 +67,8 @@ func main() {
 	fetchEvents(db, client)
 	fetchLiveSeries(db, client)
 	backfillSeries(db, client)
+	backfillEventSeries(db, client)
+	fetchRosters(db, client)
 
 	matchesT := time.NewTicker(matchEvery)
 	seriesT := time.NewTicker(seriesEvery)
@@ -85,6 +92,8 @@ func main() {
 			backfillSeries(db, client)
 		case <-eventsT.C:
 			fetchEvents(db, client)
+			backfillEventSeries(db, client)
+			fetchRosters(db, client)
 		case <-stop:
 			log.Println("stopping")
 			return
@@ -211,6 +220,90 @@ func backfillSeries(db *sql.DB, client *vlr.Client) {
 	}
 }
 
+// eventSeriesBackfillCap bounds how many event-match detail pages we fetch per
+// pass. Spread across the slow events cadence, this fills in per-map scoreboards
+// for every tracked tournament's matches — not just those on the global results
+// feed — without a request storm.
+const eventSeriesBackfillCap = 20
+
+// backfillEventSeries fetches series:{id} for completed matches in each active
+// event's match list that we don't have detail for yet, capped per pass. This is
+// what gives niche / non-VCT tournaments full scoreboards: the global results
+// feed only carries recent matches, so without this an event's older matches
+// would never get detail cached. Runs on the slow events cadence.
+func backfillEventSeries(db *sql.DB, client *vlr.Client) {
+	var ok, n int
+	for _, eventID := range activeEventIDs(db) {
+		if n >= eventSeriesBackfillCap {
+			break
+		}
+		for _, id := range completedEventMatchIDs(db, eventID) {
+			if n >= eventSeriesBackfillCap {
+				break
+			}
+			if hasKey(db, fmt.Sprintf("series:%d", id)) {
+				continue
+			}
+			n++
+			if writeSeries(db, client, id) {
+				ok++
+			}
+		}
+	}
+	if n > 0 {
+		log.Printf("series:event-backfill · %d/%d", ok, n)
+	}
+}
+
+// activeEventIDs reads the IDs of the currently-tracked events.
+func activeEventIDs(db *sql.DB) []int {
+	var value string
+	if err := db.QueryRow("SELECT value FROM kv WHERE key = 'events:active'").Scan(&value); err != nil {
+		return nil
+	}
+	var rows []struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(value), &rows); err != nil {
+		return nil
+	}
+	ids := make([]int, 0, len(rows))
+	for _, r := range rows {
+		if r.ID != 0 {
+			ids = append(ids, r.ID)
+		}
+	}
+	return ids
+}
+
+// completedEventMatchIDs reads the match IDs of completed matches in one event's
+// cached match list. Only completed matches have a final scoreboard worth
+// caching once: live matches are refreshed by fetchLiveSeries, and upcoming ones
+// have nothing to fetch yet (and caching an empty series would stick, since
+// detail is fetched once per id).
+func completedEventMatchIDs(db *sql.DB, eventID int) []int {
+	var value string
+	if err := db.QueryRow(
+		"SELECT value FROM kv WHERE key = ?", fmt.Sprintf("event:matches:%d", eventID),
+	).Scan(&value); err != nil {
+		return nil
+	}
+	var rows []struct {
+		MatchID int    `json:"match_id"`
+		Status  string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(value), &rows); err != nil {
+		return nil
+	}
+	ids := make([]int, 0, len(rows))
+	for _, r := range rows {
+		if r.MatchID != 0 && r.Status == "completed" {
+			ids = append(ids, r.MatchID)
+		}
+	}
+	return ids
+}
+
 // writeSeries scrapes one match page and upserts series:{id}. Reports success.
 func writeSeries(db *sql.DB, client *vlr.Client, id int) bool {
 	if id == 0 {
@@ -228,6 +321,89 @@ func writeSeries(db *sql.DB, client *vlr.Client, id int) bool {
 	}
 	if err := writeKey(db, fmt.Sprintf("series:%d", id), payload); err != nil {
 		log.Printf("write series:%d: %v", id, err)
+		return false
+	}
+	indexTeams(db, s.Info.Teams)
+	return true
+}
+
+// indexTeams merges scraped (team name → /team/{id}) pairs into teams:index, so
+// a clicked team name anywhere in the UI can resolve to its roster. Read-merge-
+// write is safe: the fetcher's select loop is single-goroutine.
+func indexTeams(db *sql.DB, teams []vlr.SeriesTeam) {
+	idx := map[string]int{}
+	var cur string
+	if err := db.QueryRow("SELECT value FROM kv WHERE key='teams:index'").Scan(&cur); err == nil {
+		_ = json.Unmarshal([]byte(cur), &idx)
+	}
+	changed := false
+	for _, t := range teams {
+		if t.ID == 0 || t.Name == "" {
+			continue
+		}
+		if idx[t.Name] != t.ID {
+			idx[t.Name] = t.ID
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	if payload, err := json.Marshal(idx); err == nil {
+		if err := writeKey(db, "teams:index", payload); err != nil {
+			log.Printf("write teams:index: %v", err)
+		}
+	}
+}
+
+// rosterCap bounds how many team rosters we fetch per pass. Rosters change
+// rarely, so each team is fetched once and skipped after; new teams fill in over
+// subsequent passes on the slow (events) cadence.
+const rosterCap = 20
+
+// fetchRosters fetches team:{id} for indexed teams that don't have a cached
+// roster yet, capped per pass.
+func fetchRosters(db *sql.DB, client *vlr.Client) {
+	var raw string
+	if err := db.QueryRow("SELECT value FROM kv WHERE key='teams:index'").Scan(&raw); err != nil {
+		return
+	}
+	idx := map[string]int{}
+	if json.Unmarshal([]byte(raw), &idx) != nil {
+		return
+	}
+	var ok, n int
+	for _, id := range idx {
+		if n >= rosterCap {
+			break
+		}
+		if hasKey(db, fmt.Sprintf("team:%d", id)) {
+			continue
+		}
+		n++
+		if writeRoster(db, client, id) {
+			ok++
+		}
+	}
+	if n > 0 {
+		log.Printf("rosters · %d/%d", ok, n)
+	}
+}
+
+// writeRoster scrapes one team page and upserts team:{id}. Reports success.
+func writeRoster(db *sql.DB, client *vlr.Client, id int) bool {
+	r, err := client.TeamRoster(id)
+	if err != nil {
+		log.Printf("team:%d: %v", id, err)
+		return false
+	}
+	payload, err := json.Marshal(r)
+	if err != nil {
+		log.Printf("marshal team:%d: %v", id, err)
+		return false
+	}
+	if err := writeKey(db, fmt.Sprintf("team:%d", id), payload); err != nil {
+		log.Printf("write team:%d: %v", id, err)
 		return false
 	}
 	return true
@@ -314,6 +490,49 @@ func writeKey(db *sql.DB, key string, value []byte) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// cacheVersionKey stamps the parser generation that wrote the cache.
+const cacheVersionKey = "meta:cache_version"
+
+// migrateCache invalidates a cache written by an older parser generation. When
+// the stored stamp differs from vlr.CacheVersion — or rows exist with no stamp
+// at all (a cache from before versioning) — the kv table is wiped so the next
+// fetch repopulates it through the current parsers. A genuinely empty DB is just
+// stamped: there is nothing stale to clear. The fetcher re-fetches immediately
+// after this, so a wipe only costs one refresh cycle of freshness.
+func migrateCache(db *sql.DB) {
+	var stored string
+	hasStamp := db.QueryRow(
+		"SELECT value FROM kv WHERE key = ?", cacheVersionKey,
+	).Scan(&stored) == nil
+	if hasStamp {
+		if v, err := strconv.Atoi(stored); err == nil && v == vlr.CacheVersion {
+			return
+		}
+	} else {
+		var rows int
+		_ = db.QueryRow("SELECT COUNT(*) FROM kv").Scan(&rows)
+		if rows == 0 {
+			stampCacheVersion(db)
+			return
+		}
+		stored = "unstamped"
+	}
+
+	if _, err := db.Exec("DELETE FROM kv"); err != nil {
+		log.Printf("cache migrate: wipe failed: %v", err)
+		return
+	}
+	log.Printf("cache migrate: cleared stale cache (was %q, now v%d)", stored, vlr.CacheVersion)
+	stampCacheVersion(db)
+}
+
+// stampCacheVersion records the current parser generation in the cache.
+func stampCacheVersion(db *sql.DB) {
+	if err := writeKey(db, cacheVersionKey, []byte(strconv.Itoa(vlr.CacheVersion))); err != nil {
+		log.Printf("cache migrate: stamp failed: %v", err)
+	}
 }
 
 func openDB(path string) *sql.DB {

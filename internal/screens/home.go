@@ -12,6 +12,9 @@ import (
 type Home struct {
 	w, h int
 	body string
+	// lineMatches maps a body row index to the match rendered there, so a click
+	// on a team name can open its roster.
+	lineMatches map[int]data.MatchCard
 }
 
 func NewHome(w, h int) Home {
@@ -46,12 +49,14 @@ func (s *Home) Load() {
 	b.WriteString("\n")
 
 	// live now
+	s.lineMatches = map[int]data.MatchCard{}
 	if len(liveMatches) > 0 {
 		b.WriteString(liveB("● live now") + "\n")
 		for i, m := range liveMatches {
 			if i >= 6 {
 				break
 			}
+			s.lineMatches[strings.Count(b.String(), "\n")] = m
 			b.WriteString(widgets.MatchLine(m) + "\n")
 		}
 	} else {
@@ -69,3 +74,13 @@ func (s *Home) Load() {
 }
 
 func (s Home) View() string { return s.body }
+
+// TeamAt returns the team name at a body-local (x, y) click, for opening a
+// roster from a live-match line.
+func (s Home) TeamAt(x, y int) (string, bool) {
+	m, ok := s.lineMatches[y]
+	if !ok {
+		return "", false
+	}
+	return widgets.MatchLineHit(m, x)
+}

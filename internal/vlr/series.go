@@ -3,6 +3,7 @@ package vlr
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -24,12 +25,14 @@ type SeriesInfo struct {
 	EventPhase string       `json:"event_phase"`
 	BestOf     string       `json:"best_of"`
 	StatusNote string       `json:"status_note"`
+	Remaining  string       `json:"remaining"`
 	Teams      []SeriesTeam `json:"teams"`
 	Score      []int        `json:"score"`
 	MapActions []MapAction  `json:"map_actions"`
 }
 
 type SeriesTeam struct {
+	ID    int    `json:"id"`
 	Name  string `json:"name"`
 	Short string `json:"short"`
 }
@@ -106,9 +109,20 @@ func parseSeries(r io.Reader, matchID int) (Series, error) {
 
 	info := SeriesInfo{MatchID: matchID}
 
-	// Team names (the two header links).
-	doc.Find(".match-header-link-name .wf-title-med").EachWithBreak(func(_ int, s *goquery.Selection) bool {
-		info.Teams = append(info.Teams, SeriesTeam{Name: norm(s.Text())})
+	// The two header links carry each team's name and its /team/{id} link, which
+	// is how a clicked team name later resolves to its roster page.
+	doc.Find("a.match-header-link").EachWithBreak(func(_ int, a *goquery.Selection) bool {
+		name := norm(a.Find(".wf-title-med").First().Text())
+		if name == "" {
+			return len(info.Teams) < 2
+		}
+		id := 0
+		if href, ok := a.Attr("href"); ok {
+			if m := teamIDRe.FindStringSubmatch(href); m != nil {
+				id, _ = strconv.Atoi(m[1])
+			}
+		}
+		info.Teams = append(info.Teams, SeriesTeam{ID: id, Name: name})
 		return len(info.Teams) < 2
 	})
 
@@ -119,14 +133,14 @@ func parseSeries(r io.Reader, matchID int) (Series, error) {
 		}
 	})
 
-	// Two vs-notes: [0] status (final/live), [1] best-of.
-	notes := doc.Find(".match-header-vs-note")
-	if notes.Length() > 0 {
-		info.StatusNote = norm(notes.Eq(0).Text())
-	}
-	if notes.Length() > 1 {
-		info.BestOf = norm(notes.Eq(1).Text())
-	}
+	// The vs-notes are not reliably ordered: a completed match shows
+	// ["final", "Bo3"], an upcoming one just ["Bo3"] (or a "18h 0m" countdown),
+	// a live one a "live" badge. Classify by content rather than position.
+	var noteTexts []string
+	doc.Find(".match-header-vs-note").Each(func(_ int, n *goquery.Selection) {
+		noteTexts = append(noteTexts, norm(n.Text()))
+	})
+	info.BestOf, info.StatusNote, info.Remaining = classifyNotes(noteTexts)
 
 	// Event name + series phase.
 	ev := doc.Find(".match-header-event").First()
@@ -299,6 +313,44 @@ func parseVeto(note string) []MapAction {
 		}
 	}
 	return out
+}
+
+// bestOfRe matches a best-of label ("Bo1" / "Bo3" / "Bo5").
+var bestOfRe = regexp.MustCompile(`(?i)^Bo\d+$`)
+
+// teamIDRe pulls the numeric id out of a /team/{id}/{slug} href.
+var teamIDRe = regexp.MustCompile(`/team/(\d+)`)
+
+// classifyNotes sorts the header vs-notes by content into (bestOf, status,
+// remaining). Order varies by match state, so we match on what each note is,
+// not where it sits: a "BoN" label is the best-of, a final/live word is the
+// status, and anything else (a "18h 0m" countdown) is the time remaining.
+func classifyNotes(notes []string) (bestOf, status, remaining string) {
+	for _, t := range notes {
+		switch {
+		case bestOfRe.MatchString(t):
+			bestOf = t
+		case isStatusWord(t):
+			status = t
+		case remaining == "" && t != "":
+			remaining = t
+		}
+	}
+	return bestOf, status, remaining
+}
+
+// isStatusWord reports whether a note is a match-state word rather than a
+// countdown or best-of label.
+func isStatusWord(t string) bool {
+	switch l := strings.ToLower(t); {
+	case strings.Contains(l, "final"),
+		strings.Contains(l, "live"),
+		strings.Contains(l, "complet"),
+		strings.Contains(l, "forfeit"),
+		strings.Contains(l, "cancel"):
+		return true
+	}
+	return false
 }
 
 func atoiPtr(s string) *int {

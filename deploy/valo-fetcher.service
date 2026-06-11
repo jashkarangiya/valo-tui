@@ -1,0 +1,45 @@
+# The single vlr.gg poller. One per host — it is the ONLY process that talks to
+# vlr.gg, so any number of SSH users cost the site nothing. Writes the shared
+# SQLite cache the TUI reads. Makes outbound HTTPS only; accepts no connections.
+#
+#   sudo cp deploy/valo-fetcher.service /etc/systemd/system/
+#   sudo systemctl enable --now valo-fetcher
+[Unit]
+Description=valo-tui fetcher (vlr.gg -> SQLite cache)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=valo
+Environment=VALO_TUI_DB=/var/lib/valo-tui/cache.db
+ExecStart=/usr/local/bin/valo-fetcher --watch --interval 30s
+Restart=always
+RestartSec=10
+# Be a good neighbour: if vlr.gg ever pushes back, the client already backs off;
+# systemd just keeps the daemon alive across crashes/reboots.
+
+# ── Sandboxing (LXC-safe). Needs only its cache dir + outbound network; it
+# binds no ports, so it holds no capabilities at all.
+StateDirectory=valo-tui
+CapabilityBoundingSet=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/valo-tui
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

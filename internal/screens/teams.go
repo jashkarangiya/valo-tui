@@ -77,7 +77,7 @@ func (s *Teams) Load(eventID int, eventName string) {
 				diffStyle = accentSt
 			}
 		}
-		rows = append(rows, widgets.Row{Cells: []widgets.Cell{
+		rows = append(rows, widgets.Row{Key: name, Cells: []widgets.Cell{
 			{Text: name, Style: textSt},
 			{Text: wl, Style: textSt},
 			{Text: maps, Style: mutedSt},
@@ -90,6 +90,9 @@ func (s *Teams) Load(eventID int, eventName string) {
 func (s *Teams) Focus()                           { s.table.Focus() }
 func (s *Teams) Blur()                            { s.table.Blur() }
 func (s *Teams) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
+
+// SelectedTeam returns the team name of the cursor row (for Enter → roster).
+func (s Teams) SelectedTeam() string { return s.table.SelectedKey() }
 
 func (s Teams) Update(msg tea.Msg) (Teams, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {

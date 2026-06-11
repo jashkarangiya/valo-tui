@@ -42,6 +42,19 @@ func NewMatchDetail(matchID, w, h int) MatchDetail {
 
 func (m *MatchDetail) SetSize(w, h int) { m.w, m.h = w, h }
 
+// TeamAt returns the team name for a click at overlay-local (x, y), so the
+// header names open a roster. Only the unscrolled header band is hot; the
+// left/right half of the width picks the team (names sit either side of "vs").
+func (m MatchDetail) TeamAt(x, y int) (string, bool) {
+	if !m.ok || m.scroll != 0 || y > 5 {
+		return "", false
+	}
+	if x < m.w/2 {
+		return m.detail.Team1.Name, true
+	}
+	return m.detail.Team2.Name, true
+}
+
 func (m MatchDetail) hasBracket() bool {
 	if !m.ok {
 		return false
@@ -89,9 +102,9 @@ func (m MatchDetail) View() string {
 	}
 	end := min(len(lines), m.scroll+visible)
 	view := strings.Join(lines[m.scroll:end], "\n")
-	footer := mutedSt.Render("j/k scroll · esc back")
+	footer := mutedSt.Render("j/k scroll · click team → roster · esc back")
 	if m.hasBracket() {
-		footer = mutedSt.Render("j/k scroll · b bracket · esc back")
+		footer = mutedSt.Render("j/k scroll · b bracket · click team → roster · esc back")
 	}
 	return view + "\n" + footer
 }
@@ -123,10 +136,19 @@ func (m MatchDetail) render() string {
 
 func (m MatchDetail) header(d data.SeriesDetail) string {
 	s1, s2 := derefOr0(d.Team1.Score), derefOr0(d.Team2.Score)
+	center := func(s string) string { return lipgloss.PlaceHorizontal(m.w, lipgloss.Center, s) }
+
+	// One readable scoreline: bold team names flank a clear score, the leading
+	// side's number brightened. No oversized figlet — the names stay legible.
+	t1 := lipgloss.NewStyle().Foreground(team1Col).Bold(true).Render(d.Team1.Name)
+	t2 := lipgloss.NewStyle().Foreground(team2Col).Bold(true).Render(d.Team2.Name)
+	score := scoreNum(s1, s1 >= s2) + muted("  —  ") + scoreNum(s2, s2 >= s1)
+	scoreline := t1 + "    " + score + "    " + t2
+
 	var status string
 	switch {
 	case d.IsLive():
-		status = lipgloss.NewStyle().Foreground(team1Col).Render("● live")
+		status = lipgloss.NewStyle().Foreground(team1Col).Bold(true).Render("● live")
 	case d.IsCompleted():
 		status = muted("✓ final")
 	default:
@@ -137,46 +159,41 @@ func (m MatchDetail) header(d data.SeriesDetail) string {
 		status = muted("○ " + r)
 	}
 
-	names := lipgloss.NewStyle().Foreground(team1Col).Bold(true).Render(d.Team1.Name) +
-		"    " + muted("vs") + "    " +
-		lipgloss.NewStyle().Foreground(team2Col).Bold(true).Render(d.Team2.Name)
-
-	left := lipgloss.NewStyle().Foreground(team1Col).Bold(true).Render(big(fmt.Sprint(s1)))
-	right := lipgloss.NewStyle().Foreground(team2Col).Bold(true).Render(big(fmt.Sprint(s2)))
-	dash := lipgloss.NewStyle().Foreground(styles.Muted).Render("\n\n  —  ")
-	hero := lipgloss.JoinHorizontal(lipgloss.Center, left, dash, right)
-
-	meta := ""
+	var parts []string
 	if d.BestOf != "" {
-		meta = muted(d.BestOf)
+		parts = append(parts, d.BestOf)
 	}
 	if d.Phase != "" {
-		if meta != "" {
-			meta += muted(" · " + d.Phase)
-		} else {
-			meta = muted(d.Phase)
-		}
+		parts = append(parts, d.Phase)
 	}
+	meta := muted(strings.Join(parts, " · "))
 	if meta != "" {
-		meta = meta + "   " + status
-	} else {
-		meta = status
+		meta += "   "
 	}
+	meta += status
 	if m.hasBracket() {
 		meta += "    " + lipgloss.NewStyle().Foreground(team1Col).Render("[b]") + " " + text("bracket")
 	}
 
-	center := func(s string) string { return lipgloss.PlaceHorizontal(m.w, lipgloss.Center, s) }
 	var b strings.Builder
-	b.WriteString(center(names) + "\n")
-	b.WriteString(center(hero) + "\n")
+	b.WriteString(center(scoreline) + "\n")
 	b.WriteString(center(meta) + "\n")
 	b.WriteString(center(muted(d.Event)) + "\n")
 	if intel := m.intel(d); intel != "" {
-		b.WriteString(intel + "\n")
+		b.WriteString(center(intel) + "\n")
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// scoreNum renders a bold series-score number, dimmed when it isn't the leading
+// side so the result reads at a glance.
+func scoreNum(n int, leading bool) string {
+	col := styles.Muted
+	if leading {
+		col = styles.Text
+	}
+	return lipgloss.NewStyle().Foreground(col).Bold(true).Render(fmt.Sprintf("%d", n))
 }
 
 func (m MatchDetail) intel(d data.SeriesDetail) string {
@@ -211,16 +228,24 @@ func (m MatchDetail) seriesMomentum(d data.SeriesDetail, maps []data.MapScore) s
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(lipgloss.NewStyle().Foreground(team1Col).Render("series momentum") + "\n")
+	b.WriteString(accent("maps") + "\n")
+	// Header columns are positioned to match the rows below: a 2-col map icon +
+	// 8-col name, then score, momentum bar and winner.
+	b.WriteString(mutedSt.Render(fmt.Sprintf("  %-10s%-7s%-13s%s", "map", "score", "momentum", "won by")) + "\n")
 	for _, mp := range played {
-		bar := styles.WinBar(mp.Team1Score, mp.Team2Score, 18)
-		pick := d.PickLabel(mp.Name)
-		pickTxt := ""
-		if pick != "" {
-			pickTxt = "   " + muted(pick)
+		s1, s2 := derefOr0(mp.Team1Score), derefOr0(mp.Team2Score)
+		won, wonCol := mp.Team1Short, team1Col
+		if s2 > s1 {
+			won, wonCol = mp.Team2Short, team2Col
 		}
-		line := styles.MapIcon(mp.Name) + " " + text(fmt.Sprintf("%-9s", mp.Name)) + " " + bar + "  " +
-			text(fmt.Sprintf("%d–%d", derefOr0(mp.Team1Score), derefOr0(mp.Team2Score))) + pickTxt
+		bar := styles.WinBar(mp.Team1Score, mp.Team2Score, 12)
+		line := "  " + styles.MapIcon(mp.Name) + " " + text(fmt.Sprintf("%-8s", clipRunes(mp.Name, 8))) +
+			text(fmt.Sprintf("%-7s", fmt.Sprintf("%d–%d", s1, s2))) +
+			bar + " " +
+			lipgloss.NewStyle().Foreground(wonCol).Bold(true).Render(won)
+		if pick := d.PickLabel(mp.Name); pick != "" {
+			line += "  " + muted(pick)
+		}
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
@@ -260,7 +285,10 @@ func (m MatchDetail) scoreboard(mp data.MapScore) string {
 		colour color.Color
 	}{{mp.Team1Short, team1Col}, {mp.Team2Short, team2Col}}
 
-	hdr := mutedSt.Render(fmt.Sprintf("%-15s%4s %3s %3s %3s %5s %4s", "", "acs", "k", "d", "a", "adr", "hs"))
+	// Pad the label gutter to the player rows' name+agent prefix so the column
+	// headers sit directly over their values: 4 indent + 12 name + 1 + glyph(1)
+	// + 1 + 8 agent = 27, and the stats block leads with a space ⇒ 28.
+	hdr := mutedSt.Render(fmt.Sprintf("%-28s%4s %3s %3s %3s %5s %4s", "", "acs", "k", "d", "a", "adr", "hs"))
 	var b strings.Builder
 	for _, t := range teams {
 		var tp []data.PlayerLine

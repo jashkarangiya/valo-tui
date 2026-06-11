@@ -5,6 +5,28 @@ import (
 	"testing"
 )
 
+func TestClassifyNotes(t *testing.T) {
+	cases := []struct {
+		notes                     []string
+		bestOf, status, remaining string
+	}{
+		{[]string{"final", "Bo3"}, "Bo3", "final", ""},   // completed
+		{[]string{"Bo3"}, "Bo3", "", ""},                 // upcoming, no timer
+		{[]string{"18h 0m", "Bo3"}, "Bo3", "", "18h 0m"}, // upcoming w/ countdown
+		{[]string{"Bo3", "1d 9h"}, "Bo3", "", "1d 9h"},   // countdown after best-of
+		{[]string{"live", "Bo5"}, "Bo5", "live", ""},     // live
+		{[]string{"Bo1"}, "Bo1", "", ""},                 // Bo1
+		{nil, "", "", ""},                                // nothing
+	}
+	for _, c := range cases {
+		bo, st, rem := classifyNotes(c.notes)
+		if bo != c.bestOf || st != c.status || rem != c.remaining {
+			t.Errorf("classifyNotes(%v) = (%q,%q,%q), want (%q,%q,%q)",
+				c.notes, bo, st, rem, c.bestOf, c.status, c.remaining)
+		}
+	}
+}
+
 func TestParseSeries(t *testing.T) {
 	f, err := os.Open("testdata/match.html")
 	if err != nil {
@@ -25,6 +47,9 @@ func TestParseSeries(t *testing.T) {
 	}
 	if s.Info.Teams[0].Short == "" || s.Info.Teams[1].Short == "" {
 		t.Errorf("team shorts not backfilled: %+v", s.Info.Teams)
+	}
+	if s.Info.Teams[0].ID == 0 || s.Info.Teams[1].ID == 0 {
+		t.Errorf("team ids not captured (needed for roster lookup): %+v", s.Info.Teams)
 	}
 	if len(s.Info.Score) != 2 {
 		t.Errorf("expected a 2-element series score, got %v", s.Info.Score)

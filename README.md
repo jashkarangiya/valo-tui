@@ -24,6 +24,12 @@ users ──ssh / local──▶ valo-tui (Bubble Tea) ──reads──▶ SQLi
 The cache lives at `~/.cache/valo-tui/cache.db` by default; override with the
 `VALO_TUI_DB` environment variable.
 
+The cache is stamped with a parser generation (`vlr.CacheVersion`). When a parser
+is improved in a way that changes the cached shape, bump that constant; on its
+next start the fetcher notices the stamp is stale (or absent, for a cache written
+before versioning), wipes the `kv` table, and repopulates it through the current
+parsers — no more clearing the DB by hand to drop stale entries.
+
 ## Quick start
 
 ```bash
@@ -51,7 +57,10 @@ go run ./cmd/valo-fetcher --watch \
 
 Live scores, completed results, the events list and per-event match lists, and
 the per-match broadcast detail (`series:{id}`) are each refreshed on their own
-ticker. The TUI re-reads the visible screen every 15s and shows a freshness
+ticker. Detail is cached for every live match, the recent global results feed,
+and — on the slow events cadence, a budgeted batch per pass — the completed
+matches of every tracked event, so non-VCT tournaments (Challengers, Game
+Changers, etc.) get full per-map scoreboards too, not just the VCT leagues. The TUI re-reads the visible screen every 15s and shows a freshness
 indicator (`↻ 42s ago`) in the rail, flipping to a `⚠ stale` / `⚠ fetch
 failing` warning when the fetcher falls behind or errors.
 
@@ -115,4 +124,4 @@ cache. `cmd/valo-seed` remains for offline/demo use.
 2. ~~Flat screens (home, events, about, match detail)~~ ✅
 3. ~~Event sub-pages (overview, results, fixtures, standings, bracket, teams)~~ ✅
 4. ~~Build the vlr.gg fetcher in Go (`internal/vlr` + `cmd/valo-fetcher`)~~ ✅
-5. Deploy: long-running fetcher + shared-SSH TUI host.
+5. Deploy: long-running fetcher + shared-SSH TUI host — see [deploy/](deploy/).
