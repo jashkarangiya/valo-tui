@@ -14,8 +14,7 @@ import (
 // ldflags value replaces it.
 const version = "0.2.0"
 
-// "valo-tui" in figlet ansi_shadow (the same font family as the match-detail
-// score hero), so the branding is consistent across the app.
+// "valo-tui" rendered in the figlet ansi_shadow font for the splash branding.
 const logoArt = `██╗   ██╗ █████╗ ██╗      ██████╗    ████████╗██╗   ██╗██╗
 ██║   ██║██╔══██╗██║     ██╔═══██╗   ╚══██╔══╝██║   ██║██║
 ██║   ██║███████║██║     ██║   ██║█████╗██║   ██║   ██║██║

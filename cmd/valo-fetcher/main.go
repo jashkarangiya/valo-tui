@@ -1,5 +1,6 @@
 // Command valo-fetcher scrapes vlr.gg and writes the SQLite cache the TUI
-// reads. Slice 1 populates matches:live.
+// reads: live/upcoming/completed matches, the events list and per-event match
+// lists, per-match scoreboards, and team rosters.
 //
 //	valo-fetcher --once
 //	valo-fetcher --watch --interval 30s
