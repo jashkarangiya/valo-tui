@@ -3,6 +3,11 @@
 The goal: users `ssh valo.example.com` and see live VCT data in their terminal,
 with data kept fresh **without overloading vlr.gg**.
 
+> **On Proxmox?** Use the one-command LXC deploy in [`../proxmox/`](../proxmox/)
+> — it builds a hardened, unprivileged container where the only SSH surface is
+> the read-only TUI (no shell to reach). This page covers the generic
+> bare-metal / VM setup.
+
 ## The shape
 
 ```

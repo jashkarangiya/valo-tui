@@ -1,14 +1,15 @@
-# The public SSH front door (Wish). Reads the same SQLite cache the fetcher
-# writes — read-only, so many concurrent users never contend with the writer.
+# The public SSH front door (Wish). It is the ONLY thing listening on SSH in the
+# container, and it only ever hands back the read-only TUI — no shell, no exec,
+# no SFTP, no port-forwarding. So "ssh into the container" can only show the TUI;
+# there is nothing else to reach. This unit adds OS-level sandboxing on top, as
+# defence-in-depth behind the unprivileged LXC boundary.
 #
 #   sudo cp deploy/valo-tui-ssh.service /etc/systemd/system/
 #   sudo systemctl enable --now valo-tui-ssh
 #
-# This unit binds :22 so users connect with a bare `ssh valo.example.com`. That
-# requires moving the host's own admin sshd to another port FIRST (e.g. 2222) —
-# see deploy/README.md — otherwise this service can't claim :22. To instead run
-# on an unprivileged port, set Environment=VALO_TUI_SSH_PORT=23234 and drop the
-# AmbientCapabilities line below (users then connect with `ssh -p 23234 …`).
+# Binds :22 for a bare `ssh valo.example.com`. In a dedicated container there is
+# no other sshd to conflict with. To use an unprivileged port instead, set
+# VALO_TUI_SSH_PORT=23234 and drop the AmbientCapabilities line.
 [Unit]
 Description=valo-tui SSH server (Wish)
 After=network-online.target
@@ -24,19 +25,31 @@ ExecStart=/usr/local/bin/valo-tui-ssh
 Restart=always
 RestartSec=10
 
-# Bind the privileged port 22 as the unprivileged `valo` user. Ambient caps are
-# granted even with NoNewPrivileges, and the bounding set restricts the process
-# to exactly this one capability — nothing else.
+# Bind privileged :22 as the unprivileged valo user — and grant nothing else.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
-# Hardening — read-only TUI; it needs its host key + the cache.
+# ── Sandboxing (kept to directives that work inside an unprivileged LXC) ──
+# The TUI needs only its state dir (cache + host key) and outbound nothing.
 StateDirectory=valo-tui
 ProtectSystem=strict
 ReadWritePaths=/var/lib/valo-tui
 ProtectHome=true
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
