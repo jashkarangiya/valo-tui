@@ -14,7 +14,7 @@ const (
 	// Honest, identifiable User-Agent. vlr.gg serves it normally (verified), and
 	// unlike a spoofed browser string it lets them see who we are and reach the
 	// project rather than silently blocking an anonymous scraper.
-	userAgent = "valo-tui/0.2 (+https://github.com/jashkarangiya/valo-tui)"
+	userAgent = "valo-tui/0.3 (+https://github.com/jashkarangiya/valo-tui)"
 
 	// minInterval is the floor between any two requests. vlr.gg publishes no
 	// Crawl-delay, so we self-impose one: a burst (e.g. ~40 event pages) trickles
