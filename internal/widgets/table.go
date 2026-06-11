@@ -96,8 +96,8 @@ func (t Table) SelectedKey() string {
 	return t.rows[t.cursor].Key
 }
 
-func (t *Table) Focus() { t.focused = true }
-func (t *Table) Blur()  { t.focused = false }
+func (t *Table) Focus()  { t.focused = true }
+func (t *Table) Blur()   { t.focused = false }
 func (t Table) Len() int { return len(t.rows) }
 
 func (t Table) window() (int, int) {
