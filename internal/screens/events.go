@@ -80,9 +80,9 @@ func statusCell(status string) widgets.Cell {
 	}
 }
 
-func (s *Events) Focus()                          { s.table.Focus() }
-func (s *Events) Blur()                           { s.table.Blur() }
-func (s Events) Selected() string                 { return s.table.SelectedKey() }
+func (s *Events) Focus()                           { s.table.Focus() }
+func (s *Events) Blur()                            { s.table.Blur() }
+func (s Events) Selected() string                  { return s.table.SelectedKey() }
 func (s *Events) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
 
 func (s Events) Update(msg tea.Msg) (Events, tea.Cmd) {

@@ -49,27 +49,80 @@ Already enforced in code (`internal/vlr/client.go`):
 If vlr.gg ever asks us to change behaviour, raising `--interval`/`minInterval`
 or pausing the daemon is all it takes.
 
-## Setup
+## Setup (bare `ssh valo.blackpantha.com`, port 22)
+
+This is the "just SSH in, no `-p`" deployment. Wish owns port 22, so the box's
+own admin sshd has to move off it first.
+
+### 0. DNS
+
+Add an `A` record (and `AAAA` if you have IPv6) for `valo.blackpantha.com`
+pointing at the server's public IP. Confirm it resolves before continuing:
 
 ```bash
-# 1. Build static-ish binaries (pure-Go SQLite, no CGO).
+dig +short valo.blackpantha.com
+```
+
+### 1. Move the admin sshd off port 22 — FIRST, carefully
+
+Do this before anything claims :22, and **keep your current SSH session open**
+as a safety net until you've verified the new port works.
+
+```bash
+# Pick a new admin port, e.g. 2222.
+sudo sed -i 's/^#\?Port .*/Port 2222/' /etc/ssh/sshd_config
+# If the distro ships a socket unit, it also needs the new port:
+sudo systemctl disable --now ssh.socket 2>/dev/null || true
+sudo systemctl restart ssh || sudo systemctl restart sshd
+
+# Open the firewall for the new admin port and for public :22 (the TUI).
+sudo ufw allow 2222/tcp comment 'admin ssh'
+sudo ufw allow 22/tcp   comment 'valo-tui public ssh'
+sudo ufw --force enable
+```
+
+In a **second terminal**, verify you can still get in on the new port — do not
+close the first session until this succeeds:
+
+```bash
+ssh -p 2222 you@valo.blackpantha.com
+```
+
+### 2. Build, user, host key, services
+
+```bash
+# Build static binaries (pure-Go SQLite, no CGO — runs anywhere).
 CGO_ENABLED=0 go build -o /usr/local/bin/ ./cmd/valo-fetcher ./cmd/valo-tui-ssh
 
-# 2. Dedicated user + state dir for the shared cache + host key.
+# Dedicated user + state dir for the shared cache + the public host key.
 sudo useradd --system --home /var/lib/valo-tui --create-home valo
 sudo -u valo ssh-keygen -t ed25519 -f /var/lib/valo-tui/.ssh/id_ed25519 -N ""
 
-# 3. Install + start both services.
+# Install + start both services (the SSH unit binds :22 via CAP_NET_BIND_SERVICE).
 sudo cp deploy/valo-fetcher.service deploy/valo-tui-ssh.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now valo-fetcher valo-tui-ssh
 
-# 4. Confirm the cache is filling and stays fresh.
+# Confirm: cache filling, SSH server up on :22.
 sudo journalctl -u valo-fetcher -f
+sudo journalctl -u valo-tui-ssh -n 20
 ```
 
-Point DNS at the host. Either bind Wish to `:22` (move the host's real sshd to
-another port) or keep the default `23234` and tell users `ssh -p 23234 …`.
+### 3. Connect
+
+From anywhere:
+
+```bash
+ssh valo.blackpantha.com
+```
+
+(The username is ignored — there's no login, it drops straight into the TUI.
+First connection shows this host's key fingerprint, which is the public TUI
+host key from step 2, separate from your admin sshd's key.)
+
+> Prefer not to touch the admin sshd? Set `Environment=VALO_TUI_SSH_PORT=23234`
+> in `valo-tui-ssh.service`, remove its `AmbientCapabilities` line, and users
+> connect with `ssh -p 23234 valo.blackpantha.com` instead.
 
 ## Freshness, end to end
 

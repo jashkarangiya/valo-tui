@@ -39,10 +39,10 @@ func TestParseEvents(t *testing.T) {
 
 func TestSplitDateRange(t *testing.T) {
 	cases := map[string][2]string{
-		"May 26—Jul 28": {"May 26", "Jul 28"},
-		"May 25—31":     {"May 25", "31"},
+		"May 26—Jul 28":  {"May 26", "Jul 28"},
+		"May 25—31":      {"May 25", "31"},
 		"Aug 2 - Aug 17": {"Aug 2", "Aug 17"},
-		"TBD":           {"TBD", ""},
+		"TBD":            {"TBD", ""},
 	}
 	for in, want := range cases {
 		s, e := splitDateRange(in)

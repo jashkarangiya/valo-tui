@@ -122,7 +122,7 @@ func layoutSection(columns []data.BracketColumn) (map[int]rowPos, int) {
 			}
 		}
 
-		guesses := map[int]int{}    // match_id → guessed mid
+		guesses := map[int]int{} // match_id → guessed mid
 		hasGuess := map[int]bool{}
 		for _, m := range col.Matches {
 			var anchors []int

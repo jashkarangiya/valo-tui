@@ -29,8 +29,12 @@ func TestRateLimit(t *testing.T) {
 	if len(hits) != 2 {
 		t.Fatalf("expected 2 hits, got %d", len(hits))
 	}
-	if gap := hits[1].Sub(hits[0]); gap < minInterval {
-		t.Errorf("requests spaced %v, want >= %v", gap, minInterval)
+	// The limiter spaces request *starts* by minInterval; we measure server
+	// *receive* times, which lag by the first request's latency, so allow a
+	// small slack. A broken limiter would give a near-zero gap regardless.
+	const slack = 100 * time.Millisecond
+	if gap := hits[1].Sub(hits[0]); gap < minInterval-slack {
+		t.Errorf("requests spaced %v, want ~>= %v", gap, minInterval)
 	}
 }
 
