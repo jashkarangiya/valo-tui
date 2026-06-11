@@ -106,10 +106,3 @@ func RosterByTeamName(name string) (Roster, bool) {
 	}
 	return rosterFromRaw(o), true
 }
-
-// TeamKnown reports whether a name resolves to a team we can look up — used to
-// decide whether a click should offer a roster.
-func TeamKnown(name string) bool {
-	_, ok := resolveTeamID(name)
-	return ok
-}
