@@ -12,7 +12,7 @@ import (
 
 // version is shown on the splash and about page. Kept here until a build-time
 // ldflags value replaces it.
-const version = "0.2.0"
+const version = "0.3.0"
 
 // "valo-tui" rendered in the figlet ansi_shadow font for the splash branding.
 const logoArt = `██╗   ██╗ █████╗ ██╗      ██████╗    ████████╗██╗   ██╗██╗
