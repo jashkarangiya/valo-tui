@@ -16,6 +16,7 @@
 ![TUI](https://img.shields.io/badge/built%20with-Charm-ff5fd2)
 ![SSH](https://img.shields.io/badge/serve%20over-SSH%20(Wish)-22c55e)
 ![read-only](https://img.shields.io/badge/read--only-safe-3b82f6)
+![license](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
@@ -190,4 +191,5 @@ full event-series backfill, and team rosters.
 
 ## License
 
-_Add a `LICENSE` before release._
+[MIT](LICENSE) © Jash Karangiya. Data is sourced from [vlr.gg](https://vlr.gg);
+this project is an independent, unaffiliated client.

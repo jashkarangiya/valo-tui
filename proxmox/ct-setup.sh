@@ -80,17 +80,28 @@ install -d -o valo -g valo -m 0700 "$STATE_DIR/.ssh"
 
 say "Installing systemd services"
 install -m 0644 deploy/valo-fetcher.service /etc/systemd/system/valo-fetcher.service
-# Render the SSH unit's port / fetcher interval from the chosen values.
+# Render the SSH unit's port from the chosen value, then run it with NO
+# capabilities — exactly the fetcher's profile. The unit ships an ambient
+# CAP_NET_BIND_SERVICE for bare-metal :22 binding, but that capability makes
+# systemd fail the service at the mount-namespace step inside an unprivileged
+# LXC (status=226/NAMESPACE), so we strip it here.
 sed -e "s|VALO_TUI_SSH_PORT=22|VALO_TUI_SSH_PORT=${SSH_PORT}|" \
+	-e '/^AmbientCapabilities=/d' \
+	-e 's/^CapabilityBoundingSet=.*/CapabilityBoundingSet=/' \
 	deploy/valo-tui-ssh.service >/etc/systemd/system/valo-tui-ssh.service
-if [ "$SSH_PORT" -ge 1024 ]; then
-	# Unprivileged port: needs no capability at all — drop ambient caps and
-	# empty the bounding set so the process can hold none.
-	sed -i -e '/^AmbientCapabilities=/d' \
-		-e 's/^CapabilityBoundingSet=.*/CapabilityBoundingSet=/' \
-		/etc/systemd/system/valo-tui-ssh.service
-fi
 sed -i "s|--interval 30s|--interval ${INTERVAL}|" /etc/systemd/system/valo-fetcher.service
+
+# Binding a privileged port (<1024) as the capless 'valo' user: lower this
+# network namespace's unprivileged-port floor so any user may bind it — no
+# capability needed. It's namespaced to the container, persists via the drop-in,
+# and is applied now so the restart below binds cleanly. High ports need nothing.
+if [ "$SSH_PORT" -lt 1024 ]; then
+	say "Allowing unprivileged bind of :${SSH_PORT} (ip_unprivileged_port_start)"
+	echo "net.ipv4.ip_unprivileged_port_start=${SSH_PORT}" \
+		>/etc/sysctl.d/99-valo-tui.conf
+	sysctl -w "net.ipv4.ip_unprivileged_port_start=${SSH_PORT}" >/dev/null \
+		|| say "warning: could not set ip_unprivileged_port_start; :${SSH_PORT} may fail to bind"
+fi
 
 systemctl daemon-reload
 systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true

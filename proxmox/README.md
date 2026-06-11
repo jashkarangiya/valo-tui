@@ -146,9 +146,11 @@ Defence in depth, from the inside out:
    - `NoNewPrivileges=true`, `PrivateTmp=true`
    - `ProtectSystem=strict` + `ReadWritePaths=/var/lib/valo-tui` (the *only*
      writable path), `ProtectHome=true`
-   - `CapabilityBoundingSet` minimised — the fetcher holds **no** capabilities;
-     the SSH server keeps only `CAP_NET_BIND_SERVICE` for `:22` (and even that is
-     dropped automatically when you choose an unprivileged port ≥ 1024)
+   - `CapabilityBoundingSet=` empty — **both** daemons hold **zero** capabilities.
+     Binding `:22` as the unprivileged user is allowed by lowering
+     `net.ipv4.ip_unprivileged_port_start` (namespaced to this container), which
+     avoids the ambient capability that otherwise breaks systemd's mount
+     namespace inside an unprivileged LXC
    - `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` (HTTPS scrape + TCP
      listener + local DNS, nothing exotic)
    - `SystemCallFilter=@system-service` minus `@privileged @resources`, plus
