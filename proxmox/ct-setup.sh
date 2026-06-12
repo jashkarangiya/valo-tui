@@ -80,14 +80,21 @@ install -d -o valo -g valo -m 0700 "$STATE_DIR/.ssh"
 
 say "Installing systemd services"
 install -m 0644 deploy/valo-fetcher.service /etc/systemd/system/valo-fetcher.service
-# Render the SSH unit's port from the chosen value, then run it with NO
-# capabilities — exactly the fetcher's profile. The unit ships an ambient
-# CAP_NET_BIND_SERVICE for bare-metal :22 binding, but that capability makes
-# systemd fail the service at the mount-namespace step inside an unprivileged
-# LXC (status=226/NAMESPACE), so we strip it here.
+# Render the SSH unit for an unprivileged LXC. Three LXC-specific tweaks; the
+# rest of the sandbox (ProtectSystem=strict, ProtectHome, PrivateTmp, kernel/
+# cgroup protections, syscall + address-family filters) is kept as shipped:
+#   • set the chosen port
+#   • drop AmbientCapabilities + empty CapabilityBoundingSet — the low port is
+#     bound via ip_unprivileged_port_start (below), so no capability is needed
+#   • drop ProtectProc=/ProcSubset= — these mount a *fresh* /proc, which the
+#     kernel refuses for the SSH unit inside an unprivileged LXC (status=226/
+#     NAMESPACE: "/run/systemd/unit-root/proc: Permission denied"). The fetcher
+#     keeps them: it's the first sandboxed unit up, so its proc mount succeeds.
 sed -e "s|VALO_TUI_SSH_PORT=22|VALO_TUI_SSH_PORT=${SSH_PORT}|" \
 	-e '/^AmbientCapabilities=/d' \
 	-e 's/^CapabilityBoundingSet=.*/CapabilityBoundingSet=/' \
+	-e '/^ProtectProc=/d' \
+	-e '/^ProcSubset=/d' \
 	deploy/valo-tui-ssh.service >/etc/systemd/system/valo-tui-ssh.service
 sed -i "s|--interval 30s|--interval ${INTERVAL}|" /etc/systemd/system/valo-fetcher.service
 
@@ -103,13 +110,41 @@ if [ "$SSH_PORT" -lt 1024 ]; then
 		|| say "warning: could not set ip_unprivileged_port_start; :${SSH_PORT} may fail to bind"
 fi
 
+# Clear any prior fallback override so each run re-evaluates whether it's needed.
+rm -f /etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf
 systemctl daemon-reload
 systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true
 # `restart` (not just `enable --now`) so an update picks up the freshly built
 # binary even when the service was already running. The fetcher does a full
 # initial scrape on startup, so this also primes the cache — no separate
 # `--once` run (which would double the load on vlr.gg every deploy/update).
-systemctl restart valo-fetcher valo-tui-ssh
+systemctl restart valo-fetcher valo-tui-ssh || true
+
+# Some Proxmox/kernel combinations still refuse the SSH unit's namespace setup
+# (status=226/NAMESPACE) even with the tweaks above. If so, relax the remaining
+# mount-namespace sandboxing for this one unit so it runs — the unprivileged
+# container, the nologin 'valo' user, and the read-only TUI stay the real
+# boundaries. Only triggers on failure, and announces it.
+if ! systemctl is-active --quiet valo-tui-ssh; then
+	say "SSH unit blocked by the sandbox — applying an LXC-relaxed fallback"
+	mkdir -p /etc/systemd/system/valo-tui-ssh.service.d
+	cat >/etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf <<'EOF'
+[Service]
+# Relax mount-namespace sandboxing that some unprivileged-LXC kernels reject.
+# Security still rests on the unprivileged container + nologin user + read-only
+# TUI; this only drops systemd's defence-in-depth filesystem isolation.
+ProtectProc=default
+ProcSubset=all
+ProtectSystem=false
+ProtectHome=false
+PrivateTmp=false
+ProtectControlGroups=false
+ProtectKernelTunables=false
+ReadWritePaths=
+EOF
+	systemctl daemon-reload
+	systemctl restart valo-tui-ssh || true
+fi
 
 # ── Verify the services actually came up ─────────────────────────────────────
 ok=1

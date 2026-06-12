@@ -10,9 +10,11 @@
 # Binds :22 for a bare `ssh valo.example.com`. In a dedicated container there is
 # no other sshd to conflict with. On bare metal / a VM this binds the low port
 # via the ambient CAP_NET_BIND_SERVICE below. Inside an unprivileged Proxmox LXC
-# that capability trips systemd's mount-namespace setup (status=226/NAMESPACE),
-# so ct-setup.sh drops it and lowers net.ipv4.ip_unprivileged_port_start instead.
-# To use an unprivileged port anywhere, set VALO_TUI_SSH_PORT=23234.
+# ct-setup.sh renders an LXC-safe variant: it drops the capability (binding the
+# low port via net.ipv4.ip_unprivileged_port_start instead) and drops
+# ProtectProc=/ProcSubset= below, whose fresh /proc mount the kernel refuses for
+# a second sandboxed unit (status=226/NAMESPACE). To use an unprivileged port
+# anywhere, set VALO_TUI_SSH_PORT=23234.
 [Unit]
 Description=valo-tui SSH server (Wish)
 After=network-online.target
