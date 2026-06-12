@@ -110,31 +110,34 @@ if [ "$SSH_PORT" -lt 1024 ]; then
 		|| say "warning: could not set ip_unprivileged_port_start; :${SSH_PORT} may fail to bind"
 fi
 
-# Clear any prior fallback overrides so each run re-evaluates whether needed.
-rm -f /etc/systemd/system/valo-fetcher.service.d/20-lxc-relax.conf \
-	/etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf
-systemctl daemon-reload
-systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true
-# `restart` (not just `enable --now`) so an update picks up the freshly built
-# binary even when the service was already running. The fetcher does a full
-# initial scrape on startup, so this also primes the cache — no separate
-# `--once` run (which would double the load on vlr.gg every deploy/update).
-systemctl restart valo-fetcher valo-tui-ssh || true
+# ── Start each unit; relax the sandbox per-unit only if the kernel refuses ───
+# Some Proxmox kernels reject systemd's mount-namespace setup inside an
+# unprivileged LXC (status=226/NAMESPACE) — and not deterministically: the same
+# unit can start on one run and fail on the next. So each unit is tried fully
+# hardened first; only if it fails does it get a relax drop-in and a retry.
+#
+# The probe must require the unit to HOLD active, not just blink active: these
+# units have Restart=always + RestartSec=10, so a unit that crashed at the
+# namespace step can look momentarily "active" (or be mid-auto-restart) when a
+# single is-active check runs — which is exactly how the fetcher once dodged
+# the fallback and was left crash-looping.
+holds_active() { # holds_active SVC — active now and still active a few seconds on
+	local _i
+	for _i in 1 2 3 4; do
+		systemctl is-active --quiet "$1" || return 1
+		sleep 1
+	done
+	return 0
+}
 
-# Some Proxmox/kernel combinations still refuse a unit's mount-namespace setup
-# (status=226/NAMESPACE) even with the tweaks above. For any unit that didn't
-# come up, relax the remaining mount-namespace sandboxing so it runs — the
-# unprivileged container, the nologin 'valo' user, and the read-only TUI stay
-# the real boundaries. Only triggers on failure, and announces it.
-for svc in valo-fetcher valo-tui-ssh; do
-	systemctl is-active --quiet "$svc" && continue
-	say "$svc blocked by the sandbox — applying an LXC-relaxed fallback"
-	mkdir -p "/etc/systemd/system/${svc}.service.d"
-	cat >"/etc/systemd/system/${svc}.service.d/20-lxc-relax.conf" <<'EOF'
+relax_unit() { # relax_unit SVC — shed the mount-namespace sandboxing for one unit
+	mkdir -p "/etc/systemd/system/$1.service.d"
+	cat >"/etc/systemd/system/$1.service.d/20-lxc-relax.conf" <<'EOF'
 [Service]
 # Relax mount-namespace sandboxing that some unprivileged-LXC kernels reject.
-# Security still rests on the unprivileged container + nologin user + read-only
-# TUI; this only drops systemd's defence-in-depth filesystem isolation.
+# Capability, syscall, and address-family restrictions all remain in force;
+# security still rests on the unprivileged container + nologin user + read-only
+# TUI. This only drops systemd's defence-in-depth filesystem isolation.
 ProtectProc=default
 ProcSubset=all
 ProtectSystem=false
@@ -144,22 +147,37 @@ ProtectControlGroups=false
 ProtectKernelTunables=false
 ReadWritePaths=
 EOF
-	systemctl daemon-reload
-	systemctl restart "$svc" || true
-done
+}
 
-# ── Verify the services actually came up ─────────────────────────────────────
-ok=1
+# Clear any prior fallback overrides so each run re-evaluates whether they're
+# needed (an update onto a fixed kernel returns to the hardened profile).
+rm -f /etc/systemd/system/valo-fetcher.service.d/20-lxc-relax.conf \
+	/etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf
+systemctl daemon-reload
+systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true
+
+# `restart` (not just `enable --now`) so an update picks up the freshly built
+# binary even when the service was already running. The fetcher does a full
+# initial scrape on startup, so this also primes the cache — no separate
+# `--once` run (which would double the load on vlr.gg every deploy/update).
 for svc in valo-fetcher valo-tui-ssh; do
-	if systemctl is-active --quiet "$svc"; then
-		say "$svc is active"
+	systemctl restart "$svc" 2>/dev/null || true
+	if holds_active "$svc"; then
+		say "$svc is active (hardened)"
+		continue
+	fi
+	say "$svc blocked by the sandbox — applying an LXC-relaxed profile"
+	relax_unit "$svc"
+	systemctl daemon-reload
+	systemctl restart "$svc" 2>/dev/null || true
+	if holds_active "$svc"; then
+		say "$svc is active (relaxed sandbox)"
 	else
-		ok=0
-		echo -e "\e[1;31m[valo-tui] $svc failed to start — recent logs:\e[0m" >&2
+		echo -e "\e[1;31m[valo-tui] $svc failed to start even relaxed — recent logs:\e[0m" >&2
 		journalctl -u "$svc" -n 25 --no-pager >&2 || true
+		die "$svc failed; see logs above"
 	fi
 done
-[ "$ok" -eq 1 ] || die "one or more services failed; see logs above"
 
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 PORT_ARG=""
