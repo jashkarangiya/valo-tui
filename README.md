@@ -100,6 +100,22 @@ fully scriptable via env vars — including `update.sh` and `uninstall.sh` for t
 lifecycle. See [`proxmox/README.md`](proxmox/README.md) for the full security
 model. Generic bare-metal / VM setup lives in [`deploy/`](deploy/).
 
+### Expose it with a Cloudflare Tunnel (no open ports)
+
+To reach the host from anywhere **without** forwarding a router port or revealing
+your IP, route the Wish TUI through a Cloudflare Tunnel. Inside the container:
+
+```bash
+TUNNEL_HOSTNAME=valo.black-pantha.com bash proxmox/cloudflare.sh
+```
+
+It installs `cloudflared`, creates a named tunnel, and proxies **only**
+`ssh://localhost:<port>` (nothing else). Viewers then connect with **one
+command** — `curl … | sh` on macOS/Linux/WSL or `irm … | iex` on Windows — that
+installs the `cloudflared` client and drops them straight into the TUI; the same
+command reconnects later. No open ports, no router config. See
+[`connect/`](connect/).
+
 ## 🏗 Architecture
 
 A decoupled **worker / cache** design. TUI clients only ever *read* SQLite; a
@@ -177,7 +193,8 @@ internal/
   data/           read-side SQLite cache
   vlr/            vlr.gg scraper (matches, events, detail, rosters)
 deploy/           systemd units + generic deploy guide
-proxmox/          one-command unprivileged LXC installer
+proxmox/          one-command unprivileged LXC installer + Cloudflare Tunnel
+connect/          viewer one-liners (curl|sh, irm|iex) for the tunnel
 ```
 
 ## 🧭 Status
