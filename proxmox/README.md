@@ -155,11 +155,11 @@ Defence in depth, from the inside out:
      listener + local DNS, nothing exotic)
    - `SystemCallFilter=@system-service` minus `@privileged @resources`, plus
      `ProtectKernel*` / `ProtectControlGroups` / `LockPersonality` — all chosen
-     to work *inside* an unprivileged LXC. The SSH listener additionally drops
-     `ProtectProc` / `ProcSubset` (whose fresh `/proc` mount the kernel refuses
-     for a second sandboxed unit). `ct-setup.sh` verifies both services reach
-     `active`, falls back to a relaxed profile if the kernel still refuses the
-     namespace, and dumps the journal if even that fails.
+     to work *inside* an unprivileged LXC. Both units drop `ProtectProc` /
+     `ProcSubset`, whose fresh hidepid `/proc` mount such kernels refuse for any
+     sandboxed unit (status=226/NAMESPACE). `ct-setup.sh` verifies both services
+     reach `active`, falls back to a relaxed profile for any unit the kernel
+     still refuses the namespace for, and dumps the journal if even that fails.
 5. **Unprivileged LXC.** Container root maps to an unprivileged host UID, so even
    a full in-container compromise is contained by the kernel — it is not host
    root.

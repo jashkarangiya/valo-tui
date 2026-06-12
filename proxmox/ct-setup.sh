@@ -79,24 +79,24 @@ install -d -o valo -g valo -m 0750 "$STATE_DIR"
 install -d -o valo -g valo -m 0700 "$STATE_DIR/.ssh"
 
 say "Installing systemd services"
-install -m 0644 deploy/valo-fetcher.service /etc/systemd/system/valo-fetcher.service
-# Render the SSH unit for an unprivileged LXC. Three LXC-specific tweaks; the
-# rest of the sandbox (ProtectSystem=strict, ProtectHome, PrivateTmp, kernel/
-# cgroup protections, syscall + address-family filters) is kept as shipped:
-#   • set the chosen port
-#   • drop AmbientCapabilities + empty CapabilityBoundingSet — the low port is
-#     bound via ip_unprivileged_port_start (below), so no capability is needed
-#   • drop ProtectProc=/ProcSubset= — these mount a *fresh* /proc, which the
-#     kernel refuses for the SSH unit inside an unprivileged LXC (status=226/
-#     NAMESPACE: "/run/systemd/unit-root/proc: Permission denied"). The fetcher
-#     keeps them: it's the first sandboxed unit up, so its proc mount succeeds.
+# Both units drop ProtectProc=/ProcSubset=: these mount a *fresh* hidepid /proc,
+# which an unprivileged-LXC kernel refuses for *any* sandboxed unit (status=226/
+# NAMESPACE: "/run/systemd/unit-root/proc: Permission denied"). The plain
+# bind-mounted /proc that the rest of the sandbox needs (ProtectSystem=strict,
+# ProtectHome, PrivateTmp, kernel/cgroup protections, syscall + address-family
+# filters) still works, so everything else is kept as shipped.
+sed -e "s|--interval 30s|--interval ${INTERVAL}|" \
+	-e '/^ProtectProc=/d' \
+	-e '/^ProcSubset=/d' \
+	deploy/valo-fetcher.service >/etc/systemd/system/valo-fetcher.service
+# The SSH unit additionally drops its capability lines: the low port is bound via
+# ip_unprivileged_port_start (below), so CAP_NET_BIND_SERVICE isn't needed.
 sed -e "s|VALO_TUI_SSH_PORT=22|VALO_TUI_SSH_PORT=${SSH_PORT}|" \
 	-e '/^AmbientCapabilities=/d' \
 	-e 's/^CapabilityBoundingSet=.*/CapabilityBoundingSet=/' \
 	-e '/^ProtectProc=/d' \
 	-e '/^ProcSubset=/d' \
 	deploy/valo-tui-ssh.service >/etc/systemd/system/valo-tui-ssh.service
-sed -i "s|--interval 30s|--interval ${INTERVAL}|" /etc/systemd/system/valo-fetcher.service
 
 # Binding a privileged port (<1024) as the capless 'valo' user: lower this
 # network namespace's unprivileged-port floor so any user may bind it — no
@@ -110,8 +110,9 @@ if [ "$SSH_PORT" -lt 1024 ]; then
 		|| say "warning: could not set ip_unprivileged_port_start; :${SSH_PORT} may fail to bind"
 fi
 
-# Clear any prior fallback override so each run re-evaluates whether it's needed.
-rm -f /etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf
+# Clear any prior fallback overrides so each run re-evaluates whether needed.
+rm -f /etc/systemd/system/valo-fetcher.service.d/20-lxc-relax.conf \
+	/etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf
 systemctl daemon-reload
 systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true
 # `restart` (not just `enable --now`) so an update picks up the freshly built
@@ -120,15 +121,16 @@ systemctl enable valo-fetcher valo-tui-ssh >/dev/null 2>&1 || true
 # `--once` run (which would double the load on vlr.gg every deploy/update).
 systemctl restart valo-fetcher valo-tui-ssh || true
 
-# Some Proxmox/kernel combinations still refuse the SSH unit's namespace setup
-# (status=226/NAMESPACE) even with the tweaks above. If so, relax the remaining
-# mount-namespace sandboxing for this one unit so it runs — the unprivileged
-# container, the nologin 'valo' user, and the read-only TUI stay the real
-# boundaries. Only triggers on failure, and announces it.
-if ! systemctl is-active --quiet valo-tui-ssh; then
-	say "SSH unit blocked by the sandbox — applying an LXC-relaxed fallback"
-	mkdir -p /etc/systemd/system/valo-tui-ssh.service.d
-	cat >/etc/systemd/system/valo-tui-ssh.service.d/20-lxc-relax.conf <<'EOF'
+# Some Proxmox/kernel combinations still refuse a unit's mount-namespace setup
+# (status=226/NAMESPACE) even with the tweaks above. For any unit that didn't
+# come up, relax the remaining mount-namespace sandboxing so it runs — the
+# unprivileged container, the nologin 'valo' user, and the read-only TUI stay
+# the real boundaries. Only triggers on failure, and announces it.
+for svc in valo-fetcher valo-tui-ssh; do
+	systemctl is-active --quiet "$svc" && continue
+	say "$svc blocked by the sandbox — applying an LXC-relaxed fallback"
+	mkdir -p "/etc/systemd/system/${svc}.service.d"
+	cat >"/etc/systemd/system/${svc}.service.d/20-lxc-relax.conf" <<'EOF'
 [Service]
 # Relax mount-namespace sandboxing that some unprivileged-LXC kernels reject.
 # Security still rests on the unprivileged container + nologin user + read-only
@@ -143,8 +145,8 @@ ProtectKernelTunables=false
 ReadWritePaths=
 EOF
 	systemctl daemon-reload
-	systemctl restart valo-tui-ssh || true
-fi
+	systemctl restart "$svc" || true
+done
 
 # ── Verify the services actually came up ─────────────────────────────────────
 ok=1
