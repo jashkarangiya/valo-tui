@@ -90,18 +90,14 @@ func (s *Teams) Load(eventID int, eventName string) {
 func (s *Teams) Focus()                           { s.table.Focus() }
 func (s *Teams) Blur()                            { s.table.Blur() }
 func (s *Teams) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
+func (s *Teams) MoveCursor(d int)                 { s.table.MoveCursor(d) }
 
 // SelectedTeam returns the team name of the cursor row (for Enter → roster).
 func (s Teams) SelectedTeam() string { return s.table.SelectedKey() }
 
 func (s Teams) Update(msg tea.Msg) (Teams, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
-		switch k.String() {
-		case "j", "down":
-			s.table.MoveCursor(1)
-		case "k", "up":
-			s.table.MoveCursor(-1)
-		}
+		tableMove(&s.table, k.String())
 	}
 	return s, nil
 }

@@ -47,6 +47,10 @@ type Model struct {
 	eventID   int    // 0 ⇒ global scope
 	eventName string
 
+	// contentScroll is the vertical line offset for the prose screens (home,
+	// live, about, overview, fixtures); table screens scroll their own cursor.
+	contentScroll int
+
 	overlay *screens.MatchDetail  // non-nil ⇒ match-detail overlay is open
 	roster  *screens.RosterDetail // non-nil ⇒ roster overlay is open (stacks on top)
 
@@ -137,6 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		return m.handleClick(msg.Mouse())
+
+	case tea.MouseWheelMsg:
+		return m.handleWheel(msg.Mouse())
 
 	case screens.EnterAppMsg:
 		m.route = "live"
@@ -231,8 +238,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	key := msg.String()
 	switch key {
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		return m, tea.Quit
+	case "q":
+		// q only quits from the rail; in content it backs out to the rail first,
+		// so an accidental press never drops you out of the app.
+		if m.navFocus {
+			return m, tea.Quit
+		}
+		m.focusNav()
+		return m, nil
 	case "ctrl+r":
 		m.loadRoute(m.route)
 		return m, nil
@@ -272,8 +287,22 @@ func (m Model) handleNavKey(key string) (tea.Model, tea.Cmd) {
 // handleContentKey routes movement/drill keys to the focused screen, and lets
 // letter keys jump elsewhere.
 func (m Model) handleContentKey(msg tea.KeyPressMsg, key string) (tea.Model, tea.Cmd) {
-	move := key == "j" || key == "k" || key == "up" || key == "down"
-	bracketMove := move || key == "h" || key == "l" || key == "left" || key == "right"
+	// ← is the symmetric partner of →/enter: it returns focus to the rail. The
+	// bracket is exempt — ←/→ are its grid axes, so it backs out with esc/q.
+	if key == "left" && m.route != "bracket" {
+		m.focusNav()
+		return m, nil
+	}
+	// Prose screens have no cursor, so movement keys scroll the body instead.
+	if isScrollRoute(m.route) {
+		return m.handleScrollKey(key)
+	}
+
+	move := key == "j" || key == "k" || key == "up" || key == "down" ||
+		key == "pgup" || key == "pgdown" || key == "g" || key == "G" || key == "shift+g" ||
+		key == "home" || key == "end" || key == "ctrl+d" || key == "ctrl+u"
+	bracketMove := key == "j" || key == "k" || key == "up" || key == "down" ||
+		key == "h" || key == "l" || key == "left" || key == "right"
 
 	switch m.route {
 	case "bracket":
@@ -335,6 +364,70 @@ func (m Model) handleContentKey(msg tea.KeyPressMsg, key string) (tea.Model, tea
 	return m, nil
 }
 
+// ── prose scrolling ─────────────────────────────────────────
+
+// scrollRoutes are the screens rendered as a flat block of text (no cursor), so
+// the shell scrolls their body by a line offset.
+var scrollRoutes = map[string]bool{
+	"home": true, "live": true, "about": true, "overview": true, "fixtures": true,
+}
+
+func isScrollRoute(r string) bool { return scrollRoutes[r] }
+
+// handleScrollKey scrolls a prose screen, or jumps away on a letter key.
+func (m Model) handleScrollKey(key string) (tea.Model, tea.Cmd) {
+	_, vh := contentSize(m.w, m.h)
+	switch key {
+	case "down", "j":
+		m.scrollBy(1)
+	case "up", "k":
+		m.scrollBy(-1)
+	case "pgdown":
+		m.scrollBy(vh - 1)
+	case "pgup":
+		m.scrollBy(-(vh - 1))
+	case "ctrl+d":
+		m.scrollBy(vh / 2)
+	case "ctrl+u":
+		m.scrollBy(-vh / 2)
+	case "home", "g":
+		m.contentScroll = 0
+	case "end", "G", "shift+g":
+		m.contentScroll = m.maxContentScroll()
+	default:
+		if route, ok := letterRoute[key]; ok {
+			m.show(route)
+			return m, m.maybeLiveInit()
+		}
+	}
+	return m, nil
+}
+
+// scrollBy adjusts the prose offset, clamped to [0, maxContentScroll].
+func (m *Model) scrollBy(delta int) {
+	m.contentScroll += delta
+	if max := m.maxContentScroll(); m.contentScroll > max {
+		m.contentScroll = max
+	}
+	if m.contentScroll < 0 {
+		m.contentScroll = 0
+	}
+}
+
+// maxContentScroll is how far the current prose body can scroll before its last
+// line reaches the bottom of the viewport (0 when it already fits).
+func (m Model) maxContentScroll() int {
+	if !isScrollRoute(m.route) {
+		return 0
+	}
+	_, vh := contentSize(m.w, m.h)
+	lines := strings.Count(m.rawContent(), "\n") + 1
+	if lines <= vh {
+		return 0
+	}
+	return lines - vh
+}
+
 // ── routing helpers ─────────────────────────────────────────
 
 // navItems is the ordered rail: global routes, plus event routes when focused.
@@ -362,6 +455,9 @@ func (m *Model) moveNav(delta int) {
 func (m *Model) switchContent(route string) {
 	if isEventRoute(route) && m.eventID == 0 {
 		return
+	}
+	if route != m.route {
+		m.contentScroll = 0 // start each screen at the top
 	}
 	m.route = route
 	m.loadRoute(route)
@@ -501,14 +597,24 @@ func (m Model) View() tea.View {
 // watermark is the small maker's mark in the bottom-right of every framed view.
 const watermark = "blackpantha"
 
-// frame wraps a shell body in the rounded frame, with the watermark right-
-// aligned on a footer row just inside the bottom border.
+// keyHints is the always-on cheat sheet shown at the foot of the shell, so the
+// global navigation keys are discoverable without opening About.
+const keyHints = "←/→ focus · ↑/↓ move · enter open · esc back · q quit"
+
+// frame wraps a shell body in the rounded frame, with the key hints left-
+// aligned and the watermark right-aligned on a shared footer row just inside
+// the bottom border.
 func (m Model) frame(body string) tea.View {
-	footer := lipgloss.NewStyle().
-		Width(m.w - 6).
-		Foreground(styles.Muted).
-		Align(lipgloss.Right).
-		Render(watermark)
+	w := m.w - 6
+	hint := lipgloss.NewStyle().Foreground(styles.Muted).Render(keyHints)
+	mark := lipgloss.NewStyle().Foreground(styles.Muted).Render(watermark)
+	// Drop the hints first when the frame is too narrow to fit both.
+	footer := mark
+	if gap := w - lipgloss.Width(hint) - lipgloss.Width(mark); gap >= 1 {
+		footer = hint + strings.Repeat(" ", gap) + mark
+	} else {
+		footer = lipgloss.NewStyle().Width(w).Align(lipgloss.Right).Render(mark)
+	}
 	shell := lipgloss.JoinVertical(lipgloss.Left, body, footer)
 	return altScreen(styles.Frame.Margin(1, 2).Render(shell))
 }
@@ -532,7 +638,38 @@ func (m Model) overlayBox(content string, innerH int) string {
 		Render(content)
 }
 
+// content is the body for the active route, with the prose screens sliced to
+// the scroll window. Table screens scroll their own cursor, so they pass
+// through unchanged.
 func (m Model) content() string {
+	body := m.rawContent()
+	if isScrollRoute(m.route) {
+		_, vh := contentSize(m.w, m.h)
+		body = scrollView(body, m.contentScroll, vh)
+	}
+	return body
+}
+
+// scrollView returns the height-row window of s starting at off (clamped).
+func scrollView(s string, off, height int) string {
+	if height <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if off > len(lines)-height {
+		off = len(lines) - height
+	}
+	if off < 0 {
+		off = 0
+	}
+	end := off + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return strings.Join(lines[off:end], "\n")
+}
+
+func (m Model) rawContent() string {
 	switch m.route {
 	case "home":
 		return m.home.View()
@@ -609,14 +746,15 @@ func (m Model) handleClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 		// Dashboards render team names mid-line; a click on one opens its roster.
 		// Their View origin is the content text cell (sidebar + content padding).
 		contentLeft := sidebarRight + 2
+		contentY := mo.Y - textTop + m.contentScroll // add any prose scroll offset
 		switch m.route {
 		case "home":
-			if name, ok := m.home.TeamAt(mo.X-contentLeft, mo.Y-textTop); ok {
+			if name, ok := m.home.TeamAt(mo.X-contentLeft, contentY); ok {
 				m.openRoster(name)
 				return m, nil
 			}
 		case "live":
-			if name, ok := m.live.TeamAt(mo.X-contentLeft, mo.Y-textTop); ok {
+			if name, ok := m.live.TeamAt(mo.X-contentLeft, contentY); ok {
 				m.openRoster(name)
 				return m, nil
 			}
@@ -649,6 +787,57 @@ func (m Model) handleClick(mo tea.Mouse) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// wheelStep is how many rows/lines one wheel notch scrolls.
+const wheelStep = 3
+
+// handleWheel scrolls whatever sits under the pointer: the rail previews
+// routes, a prose screen scrolls its body, a table moves its cursor.
+func (m Model) handleWheel(mo tea.Mouse) (tea.Model, tea.Cmd) {
+	if m.route == "splash" || m.overlay != nil || m.roster != nil {
+		return m, nil
+	}
+	dir := wheelStep
+	if mo.Button == tea.MouseWheelUp {
+		dir = -wheelStep
+	}
+
+	sidebarRight := 2 + sidebarTotal + 1
+	if mo.X >= 2 && mo.X < sidebarRight {
+		m.moveNav(sign(dir))
+		return m, nil
+	}
+
+	if isScrollRoute(m.route) {
+		m.scrollBy(dir)
+		return m, nil
+	}
+
+	// Table / bracket screens: drive the cursor. Focus follows the wheel so the
+	// selection is visible.
+	m.focusContent()
+	switch m.route {
+	case "events":
+		m.events.MoveCursor(dir)
+	case "results":
+		m.results.MoveCursor(dir)
+	case "standings":
+		m.standings.MoveCursor(dir)
+	case "teams":
+		m.teams.MoveCursor(dir)
+	case "bracket":
+		m.bracket.MoveCursor(sign(dir))
+	}
+	return m, nil
+}
+
+// sign collapses a delta to -1 or +1 (wheel notch → one rail/grid step).
+func sign(d int) int {
+	if d < 0 {
+		return -1
+	}
+	return 1
 }
 
 // ── small helpers ───────────────────────────────────────────

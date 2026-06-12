@@ -166,6 +166,81 @@ func TestFullNavigationRendersEveryScreen(t *testing.T) {
 	}
 }
 
+func arrow(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
+
+// enterEvents enters the app and focuses the events content pane.
+func enterEvents(t *testing.T) tea.Model {
+	t.Helper()
+	seed(t)
+	var m tea.Model = New(140, 44)
+	m = run(t, m, screens.EnterAppMsg{})
+	return run(t, m, key("e")) // jumps to events and focuses the content
+}
+
+func TestLeftReturnsFocusToRail(t *testing.T) {
+	m := enterEvents(t)
+	if m.(Model).navFocus {
+		t.Fatalf("expected content focus after jumping to events")
+	}
+	m = run(t, m, arrow(tea.KeyLeft))
+	if !m.(Model).navFocus {
+		t.Errorf("← in content should return focus to the rail")
+	}
+}
+
+func TestQBacksOutThenQuits(t *testing.T) {
+	m := enterEvents(t)
+
+	// First q: backs out to the rail, does not quit.
+	next, cmd := m.Update(key("q"))
+	if !next.(Model).navFocus {
+		t.Errorf("q in content should back out to the rail")
+	}
+	if isQuit(cmd) {
+		t.Errorf("q in content should not quit the app")
+	}
+
+	// Second q (from the rail): quits.
+	_, cmd = next.Update(key("q"))
+	if !isQuit(cmd) {
+		t.Errorf("q on the rail should quit the app")
+	}
+}
+
+func TestProseScrolls(t *testing.T) {
+	seed(t)
+	var m tea.Model = New(60, 16) // small frame so About overflows
+	m = run(t, m, screens.EnterAppMsg{})
+	m = run(t, m, key("a")) // about (a prose screen), now content-focused
+
+	if got := m.(Model).contentScroll; got != 0 {
+		t.Fatalf("about should start at the top, got offset %d", got)
+	}
+	m = run(t, m, arrow(tea.KeyDown))
+	if got := m.(Model).contentScroll; got != 1 {
+		t.Errorf("↓ should scroll the prose body by one line, got %d", got)
+	}
+	// End jumps to the bottom; scrolling further is clamped there.
+	m = run(t, m, key("G"))
+	max := m.(Model).contentScroll
+	if max < 1 {
+		t.Fatalf("expected About to overflow a 16-row frame, max offset %d", max)
+	}
+	m = run(t, m, arrow(tea.KeyDown))
+	if got := m.(Model).contentScroll; got != max {
+		t.Errorf("scrolling past the end should clamp at %d, got %d", max, got)
+	}
+}
+
+// isQuit reports whether cmd is the tea.Quit command.
+func isQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
+}
+
 func click(x, y int) tea.MouseClickMsg {
 	return tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y}
 }

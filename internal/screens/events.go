@@ -84,15 +84,11 @@ func (s *Events) Focus()                           { s.table.Focus() }
 func (s *Events) Blur()                            { s.table.Blur() }
 func (s Events) Selected() string                  { return s.table.SelectedKey() }
 func (s *Events) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
+func (s *Events) MoveCursor(d int)                 { s.table.MoveCursor(d) }
 
 func (s Events) Update(msg tea.Msg) (Events, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
-		switch k.String() {
-		case "j", "down":
-			s.table.MoveCursor(1)
-		case "k", "up":
-			s.table.MoveCursor(-1)
-		}
+		tableMove(&s.table, k.String())
 	}
 	return s, nil
 }
@@ -100,7 +96,7 @@ func (s Events) Update(msg tea.Msg) (Events, tea.Cmd) {
 func (s Events) View() string {
 	header := title("events") + "\n" + hint("enter → open event · j/k move") + "\n\n"
 	if s.table.Len() == 0 {
-		return header + muted("no events in cache — seed it (see README)")
+		return header + muted("waiting for data — the fetcher is warming up")
 	}
 	return header + s.table.View()
 }

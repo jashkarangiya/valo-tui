@@ -65,18 +65,14 @@ func (s *Standings) Load(eventID int, eventName string) {
 func (s *Standings) Focus()                           { s.table.Focus() }
 func (s *Standings) Blur()                            { s.table.Blur() }
 func (s *Standings) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
+func (s *Standings) MoveCursor(d int)                 { s.table.MoveCursor(d) }
 
 // SelectedTeam returns the team name of the cursor row (for Enter → roster).
 func (s Standings) SelectedTeam() string { return s.table.SelectedKey() }
 
 func (s Standings) Update(msg tea.Msg) (Standings, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
-		switch k.String() {
-		case "j", "down":
-			s.table.MoveCursor(1)
-		case "k", "up":
-			s.table.MoveCursor(-1)
-		}
+		tableMove(&s.table, k.String())
 	}
 	return s, nil
 }
