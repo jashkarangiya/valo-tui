@@ -8,5 +8,4 @@
 # Local cache + scratch
 *.db
 .cache/
-screenshots/
 .DS_Store

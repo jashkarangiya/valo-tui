@@ -35,6 +35,14 @@ so you can host a single instance and let anyone `ssh` in to watch.
 Built in Go on the [Charm](https://charm.land) stack — **Bubble Tea v2** runtime,
 **Lip Gloss v2** styling, **Wish v2** SSH.
 
+<div align="center">
+
+![global live dashboard](screenshots/02_live.png)
+
+*The global live dashboard — every Tier-1 region at a glance (live: Masters London 2026).*
+
+</div>
+
 ## ✨ Features
 
 - **Live & upcoming matches** across every Tier-1 region, refreshed on a fast ticker.
@@ -48,6 +56,24 @@ Built in Go on the [Charm](https://charm.land) stack — **Bubble Tea v2** runti
   `⚠ fetch failing` the moment the worker falls behind, so dead data is never silent.
 - **Serve over SSH** — one host, many viewers, zero extra load on vlr.gg.
 - **Read-only by design** — no shell, no writes; safe to expose publicly.
+
+## 📸 Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/12_match_detail.png" alt="live match detail"><br><sub><b>Live match detail</b> — broadcast header, per-map momentum, round timeline, and agent-grouped scoreboards (live: Heretics vs Vitality).</sub></td>
+<td width="50%"><img src="screenshots/10_bracket.png" alt="double-elim bracket"><br><sub><b>Bracket</b> — the full ASCII double-elimination tree.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/06_overview.png" alt="event overview"><br><sub><b>Event overview</b> — series progress and quick-nav into every event page.</sub></td>
+<td width="50%"><img src="screenshots/13_roster.png" alt="team roster"><br><sub><b>Team roster</b> — players and staff, drilled in from standings or teams.</sub></td>
+</tr>
+</table>
+
+<sub>Screenshots captured live from <a href="https://vlr.gg">vlr.gg</a> during Valorant Masters London 2026.</sub>
+
+The splash, home, events, about, results, fixtures, standings, and teams pages
+are in [`screenshots/`](screenshots/).
 
 ## 🚀 Quick start
 
