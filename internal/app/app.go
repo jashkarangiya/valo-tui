@@ -96,7 +96,8 @@ func contentSize(w, h int) (int, int) {
 	if cw < 24 {
 		cw = 24
 	}
-	ch := h - 6
+	// Reserve one row at the bottom of the shell for the watermark footer.
+	ch := h - 7
 	if ch < 6 {
 		ch = 6
 	}
@@ -469,18 +470,19 @@ func (m Model) View() tea.View {
 	if m.route == "splash" {
 		return altScreen(m.splash.View())
 	}
-	innerH := m.h - 4 // shell height inside the frame (margin 2 + border 2)
+	innerH := m.h - 4   // shell height inside the frame (margin 2 + border 2)
+	bodyH := innerH - 1 // reserve the last row for the watermark footer
 
 	// Overlays fill the same framed area as the shell. Roster sits on top.
 	if m.roster != nil {
-		return altScreen(styles.Frame.Margin(1, 2).Render(m.overlayBox(m.roster.View(), innerH)))
+		return m.frame(m.overlayBox(m.roster.View(), bodyH))
 	}
 	if m.overlay != nil {
-		return altScreen(styles.Frame.Margin(1, 2).Render(m.overlayBox(m.overlay.View(), innerH)))
+		return m.frame(m.overlayBox(m.overlay.View(), bodyH))
 	}
 
 	sidebar := lipgloss.NewStyle().
-		Width(sidebarTotal).Height(innerH).
+		Width(sidebarTotal).Height(bodyH).
 		Padding(1, 2).
 		BorderRight(true).
 		BorderStyle(lipgloss.NormalBorder()).
@@ -488,11 +490,26 @@ func (m Model) View() tea.View {
 		Render(widgets.Sidebar(m.route, m.eventName, m.navFocus, cacheHealth()))
 
 	content := lipgloss.NewStyle().
-		Width(m.w-6-sidebarTotal).Height(innerH).MaxHeight(innerH).
+		Width(m.w-6-sidebarTotal).Height(bodyH).MaxHeight(bodyH).
 		Padding(1, 2).
 		Render(m.content())
 
 	shell := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
+	return m.frame(shell)
+}
+
+// watermark is the small maker's mark in the bottom-right of every framed view.
+const watermark = "blackpantha"
+
+// frame wraps a shell body in the rounded frame, with the watermark right-
+// aligned on a footer row just inside the bottom border.
+func (m Model) frame(body string) tea.View {
+	footer := lipgloss.NewStyle().
+		Width(m.w - 6).
+		Foreground(styles.Muted).
+		Align(lipgloss.Right).
+		Render(watermark)
+	shell := lipgloss.JoinVertical(lipgloss.Left, body, footer)
 	return altScreen(styles.Frame.Margin(1, 2).Render(shell))
 }
 

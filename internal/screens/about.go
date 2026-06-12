@@ -42,6 +42,10 @@ func (s About) View() string {
 	b.WriteString(muted("· o ") + text("overview  ") + muted("· ") + text("r ") + muted("results  ") + text("· f ") + muted("fixtures") + "\n")
 	b.WriteString(muted("· t ") + text("standings ") + muted("· ") + text("b ") + muted("bracket  ") + text("· m ") + muted("teams") + "\n\n")
 
+	b.WriteString(accent("credits") + "\n")
+	b.WriteString(muted("· built by    ") + text("github.com/jashkarangiya") + "\n")
+	b.WriteString(muted("· inspired by ") + text("github.com/h0i5/ipl") + "\n\n")
+
 	b.WriteString(accent("keys") + "\n")
 	b.WriteString(muted("· ↑↓ / j k move · enter open · esc back to nav") + "\n")
 	b.WriteString(muted("· ctrl+r refresh · q quit"))
