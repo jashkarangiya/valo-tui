@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -28,6 +29,13 @@ import (
 
 	"github.com/jashkarangiya/valo-tui/internal/app"
 )
+
+// maxSessions caps concurrent SSH sessions. Past this point a connection flood
+// would push the container into the OOM-killer, which drops *everyone* and
+// triggers a reconnect stampede; refusing the surplus instead keeps every
+// already-connected viewer alive. Sized for a multi-GB container — lower it if
+// you run on the default 512 MB CT.
+const maxSessions = 512
 
 func main() {
 	host := flag.String("host", envOr("VALO_TUI_SSH_HOST", "0.0.0.0"),
@@ -44,9 +52,12 @@ func main() {
 		// Drop idle/abandoned connections so the public front door can't be tied
 		// up: the TUI is read-only, so the only abuse vector is connection count.
 		wish.WithIdleTimeout(15*time.Minute),
+		// Middleware runs last-listed-first, so logging still records every
+		// attempt and the session cap gates before the PTY/program is set up.
 		wish.WithMiddleware(
 			bubbletea.Middleware(teaHandler),
 			activeterm.Middleware(), // Bubble Tea needs a PTY
+			limitSessions(maxSessions),
 			logging.Middleware(),
 		),
 	)
@@ -80,6 +91,25 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// limitSessions returns middleware that admits at most limit concurrent
+// sessions. The surplus get a one-line "at capacity" notice and a clean
+// disconnect instead of dragging the whole server down with them.
+func limitSessions(limit int) wish.Middleware {
+	var active int64
+	return func(next ssh.Handler) ssh.Handler {
+		return func(sess ssh.Session) {
+			n := atomic.AddInt64(&active, 1)
+			defer atomic.AddInt64(&active, -1)
+			if n > int64(limit) {
+				wish.Printf(sess, "valo-tui is at capacity (%d viewers). Please try again in a minute.\r\n", limit)
+				log.Info("session refused: at capacity", "limit", limit, "remote", sess.RemoteAddr())
+				return
+			}
+			next(sess)
+		}
+	}
 }
 
 // teaHandler is invoked once per SSH connection.

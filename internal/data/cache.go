@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, no CGO
@@ -62,20 +63,50 @@ func dbPath() string {
 	return filepath.Join(home, ".cache", "valo-tui", "cache.db")
 }
 
-// open returns a read-only connection to the kv cache. Read-only so the TUI
-// never contends with the worker's writes.
-func open() (*sql.DB, error) {
-	dsn := "file:" + dbPath() + "?mode=ro&_busy_timeout=5000"
-	return sql.Open("sqlite", dsn)
+var (
+	dbMu     sync.Mutex
+	dbHandle *sql.DB
+	dbForDSN string // the path dbHandle was opened for
+)
+
+// cacheDB returns a process-wide read-only handle to the kv cache, opening it
+// lazily and reopening only if the configured path changes (e.g. across tests
+// that point VALO_TUI_DB at different temp files). One shared *sql.DB lets every
+// SSH session's periodic refresh reuse a small pooled set of connections instead
+// of opening — and closing — a fresh database handle on every single query,
+// which is the difference between a handful and thousands of viewers. Read-only
+// + WAL means the pool never contends with the worker's writes.
+func cacheDB() (*sql.DB, error) {
+	path := dbPath()
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if dbHandle != nil && dbForDSN == path {
+		return dbHandle, nil
+	}
+	if dbHandle != nil {
+		dbHandle.Close()
+		dbHandle = nil
+	}
+	h, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_busy_timeout=5000")
+	if err != nil {
+		return nil, err
+	}
+	// Cap the pool so a burst of sessions can't open unbounded file descriptors;
+	// read-only WAL queries are sub-millisecond, so a few connections serve a
+	// very large number of viewers.
+	h.SetMaxOpenConns(8)
+	h.SetMaxIdleConns(8)
+	h.SetConnMaxIdleTime(time.Minute)
+	dbHandle, dbForDSN = h, path
+	return dbHandle, nil
 }
 
 // getRaw returns the JSON value and updated_at for a kv key.
 func getRaw(key string) (json.RawMessage, string) {
-	db, err := open()
+	db, err := cacheDB()
 	if err != nil {
 		return nil, ""
 	}
-	defer db.Close()
 	var value, updatedAt string
 	err = db.QueryRow("SELECT value, updated_at FROM kv WHERE key = ?", key).
 		Scan(&value, &updatedAt)
