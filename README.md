@@ -22,6 +22,20 @@
 
 ---
 
+## 📺 Watch now (no install)
+
+A live instance is already running. From any terminal on macOS, Linux, or
+Windows (WSL / PowerShell), SSH in and you land straight in the read-only TUI.
+No account, no password, nothing to install:
+
+```bash
+ssh valo.black-pantha.com
+```
+
+Press `q` to quit. That's the whole thing. Read on if you want to run your own.
+
+---
+
 `valo-tui` is a fast, read-only terminal UI for tracking Valorant esports: the
 four Tier-1 regional leagues (Americas, EMEA, Pacific, China), the international
 events (Masters / Champions), and the long tail of Challengers and Game Changers
@@ -74,18 +88,6 @@ Built in Go on the [Charm](https://charm.land) stack: **Bubble Tea v2** runtime,
 
 The splash, home, events, about, results, fixtures, standings, and teams pages
 are in [`screenshots/`](screenshots/).
-
-## 📺 Watch now (no install)
-
-A live instance is already running. From any terminal on macOS, Linux, or
-Windows (WSL / PowerShell), just SSH in and you land straight in the TUI:
-
-```bash
-ssh valo.black-pantha.com
-```
-
-No account, no password, no client to install. The username is ignored and the
-session is read-only, so it is safe to connect to. Press `q` to quit.
 
 ## 🛠 Dev / run it yourself
 
@@ -167,44 +169,44 @@ home-hosted TUI is exposed through a small cloud relay over an outbound reverse
 SSH tunnel, so there are no inbound ports open at home:
 
 ```
-                          ┌─────────────────┐
-                          │     vlr.gg      │
-                          │  (data source)  │
-                          └────────▲────────┘
-                                   │ polite polling (~1.5s/req, rate-limited)
-                                   │
-                     ┌─────────────┴──────────────┐
-                     │         valo-fetcher        │
-                     │  (single background poller) │
-                     └─────────────┬──────────────┘
-                                   │ writes
-                                   ▼
-                     ┌────────────────────────────┐
-                     │    cache.db (SQLite, WAL)   │
-                     └─────────────┬──────────────┘
-                                   │ reads (one writer, many readers)
-                                   ▼
-                     ┌────────────────────────────┐
-                     │        valo-tui-ssh         │
-                     │      (Wish SSH server)      │
-                     │    inside a hardened LXC    │
-                     │     read-only, no shell     │
-                     └─────────────┬──────────────┘
-                                   │ outbound reverse SSH tunnel (autossh)
-                                   │ persistent, auto-reconnect, no inbound ports at home
-                                   ▼
-                     ┌────────────────────────────┐
-                     │      cloud relay (VPS)      │
-                     │         valo-relay          │
-                     │   forwards SSH via tunnel   │
-                     └─────────────▲──────────────┘
-                                   │
-                                   │ ssh valo.black-pantha.com
-                                   │
-                     ┌─────────────┴──────────────┐
-                     │           Viewers           │
-                     │    (VCT fans, terminals)    │
-                     └────────────────────────────┘
+    ┌──────────────────────────────┐
+    │            vlr.gg            │
+    │        (data source)         │
+    └───────────────▲──────────────┘
+                    │ polite polling (~1.5s/req, rate-limited)
+                    │
+    ┌──────────────────────────────┐
+    │         valo-fetcher         │
+    │  (single background poller)  │
+    └───────────────┬──────────────┘
+                    │ writes
+                    ▼
+    ┌──────────────────────────────┐
+    │    cache.db (SQLite, WAL)    │
+    └───────────────┬──────────────┘
+                    │ reads (one writer, many readers)
+                    ▼
+    ┌──────────────────────────────┐
+    │         valo-tui-ssh         │
+    │      (Wish SSH server)       │
+    │    inside a hardened LXC     │
+    │     read-only, no shell      │
+    └───────────────┬──────────────┘
+                    │ outbound reverse SSH tunnel (autossh)
+                    │ persistent, auto-reconnect, no inbound ports at home
+                    ▼
+    ┌──────────────────────────────┐
+    │      cloud relay (VPS)       │
+    │          valo-relay          │
+    │   forwards SSH via tunnel    │
+    └───────────────▲──────────────┘
+                    │
+                    │ ssh valo.black-pantha.com
+                    │
+    ┌──────────────────────────────┐
+    │           Viewers            │
+    │    (VCT fans, terminals)     │
+    └──────────────────────────────┘
 ```
 
 The relay only forwards the tunneled, read-only TUI; it holds no data and runs
