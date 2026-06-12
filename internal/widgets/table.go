@@ -73,6 +73,31 @@ func (t *Table) MoveCursor(delta int) {
 	}
 }
 
+// page is the row step for PgUp/PgDn: one viewport minus a row of overlap, or 1
+// when the body height is unknown/tiny.
+func (t Table) page() int {
+	if t.height > 1 {
+		return t.height - 1
+	}
+	return 1
+}
+
+// PageDown / PageUp move the cursor by one viewport.
+func (t *Table) PageDown() { t.MoveCursor(t.page()) }
+func (t *Table) PageUp()   { t.MoveCursor(-t.page()) }
+
+// HalfDown / HalfUp move the cursor by half a viewport (ctrl+d / ctrl+u).
+func (t *Table) HalfDown() { t.MoveCursor(t.page()/2 + 1) }
+func (t *Table) HalfUp()   { t.MoveCursor(-(t.page()/2 + 1)) }
+
+// Top / Bottom jump the cursor to the first / last row (g / G).
+func (t *Table) Top() { t.cursor = 0 }
+func (t *Table) Bottom() {
+	if t.cursor = len(t.rows) - 1; t.cursor < 0 {
+		t.cursor = 0
+	}
+}
+
 // ClickVisual moves the cursor to the visually-nth body row (accounting for the
 // scroll window) and returns its key. ok is false if the click missed a row.
 func (t *Table) ClickVisual(visual int) (string, bool) {

@@ -98,15 +98,11 @@ func (s *Results) Focus()                           { s.table.Focus() }
 func (s *Results) Blur()                            { s.table.Blur() }
 func (s Results) Selected() string                  { return s.table.SelectedKey() }
 func (s *Results) ClickVisual(i int) (string, bool) { return s.table.ClickVisual(i) }
+func (s *Results) MoveCursor(d int)                 { s.table.MoveCursor(d) }
 
 func (s Results) Update(msg tea.Msg) (Results, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
-		switch k.String() {
-		case "j", "down":
-			s.table.MoveCursor(1)
-		case "k", "up":
-			s.table.MoveCursor(-1)
-		}
+		tableMove(&s.table, k.String())
 	}
 	return s, nil
 }

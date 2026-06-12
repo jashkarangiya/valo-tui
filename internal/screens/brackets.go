@@ -370,6 +370,15 @@ func (s Bracket) SelectedMatchID() int {
 func (s *Bracket) Focus() {}
 func (s *Bracket) Blur()  {}
 
+// MoveCursor moves the row cursor within the current column (for mouse wheel).
+func (s *Bracket) MoveCursor(d int) {
+	if s.selCol >= len(s.columns) {
+		return
+	}
+	n := len(s.columns[s.selCol].Matches)
+	s.selRow = clampIndex(s.selRow+d, n)
+}
+
 func (s Bracket) Update(msg tea.Msg) (Bracket, tea.Cmd) {
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok || len(s.columns) == 0 {
